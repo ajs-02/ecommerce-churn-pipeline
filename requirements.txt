@@ -1,0 +1,15 @@
+# Database & Data Processing
+pandas
+psycopg2-binary
+sqlalchemy
+python-dotenv
+
+# dbt Transformation Engine
+dbt-postgres
+
+# Machine Learning & Notebooks
+scikit-learn
+jupyter
+
+# Development
+black
