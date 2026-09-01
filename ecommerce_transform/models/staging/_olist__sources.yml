@@ -1,0 +1,16 @@
+version: 2
+
+sources:
+  - name: olist
+    description: Raw Olist e-commerce tables loaded from CSV uploads
+    schema: public
+    tables:
+      - name: customers
+      - name: geolocation
+      - name: order_items
+      - name: order_payments
+      - name: order_reviews
+      - name: orders
+      - name: products
+      - name: product_category_name_translation
+      - name: sellers
