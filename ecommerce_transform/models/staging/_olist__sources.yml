@@ -2,15 +2,28 @@ version: 2
 
 sources:
   - name: olist
-    description: Raw Olist e-commerce tables loaded from CSV uploads
+    description: Raw Olist e-commerce tables loaded from CSV uploads into the public schema.
     schema: public
     tables:
       - name: customers
+        description: >
+          One row per order-scoped customer_id. customer_unique_id identifies the person;
+          the same person can appear under multiple customer_ids.
       - name: geolocation
+        description: Zip-code-level lat/long lookup. Not required for customer_features.
       - name: order_items
+        description: One row per line item (product, seller, price, freight) within an order.
       - name: order_payments
+        description: >
+          One or more rows per order describing how it was paid (type, installments, value).
+          Raw grain is 1-to-many with orders; staging aggregates to one row per order_id.
       - name: order_reviews
+        description: Customer reviews tied to orders. Not required for customer_features.
       - name: orders
+        description: One row per order, with status and lifecycle timestamps.
       - name: products
+        description: One row per product, including Portuguese category and physical attributes.
       - name: product_category_name_translation
+        description: Portuguese to English product category name mapping.
       - name: sellers
+        description: One row per seller. Not required for customer_features.

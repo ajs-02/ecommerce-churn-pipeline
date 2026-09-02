@@ -1,0 +1,99 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: One row per order-customer record (customer_id is unique; customer_unique_id is the person).
+    columns:
+      - name: customer_id
+        description: Order-scoped customer key (primary key of the raw customers table).
+        tests:
+          - unique
+          - not_null
+      - name: customer_unique_id
+        description: Stable identifier for the actual person across orders.
+        tests:
+          - not_null
+      - name: customer_state
+        description: Two-letter Brazilian state code, uppercased.
+
+  - name: stg_orders
+    description: One row per order with typed lifecycle timestamps.
+    columns:
+      - name: order_id
+        description: Primary key.
+        tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: Foreign key to stg_customers.customer_id.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: order_status
+        description: Order lifecycle status from the Olist source.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - delivered
+                  - shipped
+                  - canceled
+                  - unavailable
+                  - invoiced
+                  - processing
+                  - created
+                  - approved
+      - name: order_purchase_ts
+        description: When the customer placed the order.
+      - name: order_delivered_customer_ts
+        description: When the order was delivered to the customer (null if not delivered).
+
+  - name: stg_order_items
+    description: One row per line item within an order.
+    columns:
+      - name: order_id
+        description: Foreign key to stg_orders.order_id.
+        tests:
+          - not_null
+      - name: product_id
+        description: Foreign key to stg_products.product_id.
+        tests:
+          - not_null
+      - name: item_price
+        description: Line-item merchandise price (excludes freight).
+        tests:
+          - not_null
+      - name: freight_value
+        description: Freight charged for this line item.
+
+  - name: stg_products
+    description: One row per product with an English category name when available.
+    columns:
+      - name: product_id
+        description: Primary key.
+        tests:
+          - unique
+          - not_null
+      - name: category_english
+        description: English category, falling back to Portuguese name or 'unknown'.
+        tests:
+          - not_null
+
+  - name: stg_order_payments
+    description: One row per order after aggregating split payments.
+    columns:
+      - name: order_id
+        description: Primary key after aggregation (one payment summary per order).
+        tests:
+          - unique
+          - not_null
+      - name: total_payment_value
+        description: Sum of payment_value across all payment rows for the order.
+        tests:
+          - not_null
+      - name: favorite_payment_type
+        description: Payment type that contributed the largest share of the order value.

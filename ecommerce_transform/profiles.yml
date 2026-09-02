@@ -9,4 +9,4 @@ ecommerce_transform:
       port: "{{ env_var('POSTGRES_PORT') | int }}"
       dbname: "{{ env_var('POSTGRES_DB') }}"
       schema: public
-      threads: "{{ env_var('THREADS') | int }}"
+      threads: "{{ env_var('THREADS', '4') | int }}"

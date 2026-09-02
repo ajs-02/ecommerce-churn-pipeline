@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: customer_features
+    description: >
+      One row per customer_unique_id. Machine-learning feature table for repeat-buyer
+      propensity (label is derived from total_orders > 1; do not use total_orders as a predictor).
+    columns:
+      - name: customer_unique_id
+        description: Grain of the table. One person, possibly many order-scoped customer_ids.
+        tests:
+          - unique
+          - not_null
+      - name: customer_state
+        description: Most common state across the customer's order-scoped records.
+      - name: total_orders
+        description: Count of distinct delivered orders. Source of the repeat-buyer label.
+        tests:
+          - not_null
+      - name: total_spent
+        description: Sum of staged order payment totals for delivered orders.
+        tests:
+          - not_null
+      - name: average_order_value
+        description: total_spent divided by total_orders.
+      - name: days_since_last_purchase
+        description: Days between the latest delivered purchase timestamp and current_date.
+      - name: favorite_payment_type
+        description: Payment type associated with the largest share of the customer's spend.

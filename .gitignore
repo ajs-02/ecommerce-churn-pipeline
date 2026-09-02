@@ -58,6 +58,7 @@ data/*
 
 # IDE & editors
 .vscode/
+.cursor/
 .idea/
 *.swp
 *.swo
@@ -67,6 +68,9 @@ data/*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Docs
+docs/*
 
 # Logs
 *.log
