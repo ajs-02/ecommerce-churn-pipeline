@@ -13,6 +13,8 @@ models:
         description: Stable identifier for the actual person across orders.
         tests:
           - not_null
+      - name: customer_zip_code_prefix
+        description: Integer Brazilian CEP prefix from the Olist source (not a full postal code).
       - name: customer_state
         description: Two-letter Brazilian state code, uppercased.
 
@@ -49,20 +51,44 @@ models:
                   - approved
       - name: order_purchase_ts
         description: When the customer placed the order.
+      - name: order_approved_ts
+        description: When payment was approved (null if the order was never approved).
+      - name: order_delivered_carrier_ts
+        description: When the order was handed to the carrier (null if never shipped).
       - name: order_delivered_customer_ts
         description: When the order was delivered to the customer (null if not delivered).
+      - name: order_estimated_delivery_ts
+        description: Carrier's estimated delivery date promised at purchase.
 
   - name: stg_order_items
     description: One row per line item within an order.
+    tests:
+      - unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - order_id
+              - order_item_id
     columns:
       - name: order_id
         description: Foreign key to stg_orders.order_id.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: order_item_id
+        description: Integer line-item sequence within the order (1-based).
         tests:
           - not_null
       - name: product_id
         description: Foreign key to stg_products.product_id.
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
       - name: item_price
         description: Line-item merchandise price (excludes freight).
         tests:
@@ -91,9 +117,53 @@ models:
         tests:
           - unique
           - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
       - name: total_payment_value
         description: Sum of payment_value across all payment rows for the order.
         tests:
           - not_null
       - name: favorite_payment_type
         description: Payment type that contributed the largest share of the order value.
+      - name: used_voucher
+        description: >
+          True if any payment row on the order has payment_type = voucher
+          (split tenders still count). Distinct from favorite_payment_type.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - true
+                  - false
+
+  - name: stg_order_reviews
+    description: One row per review. Grain stays at review_id; do not collapse to order in staging.
+    columns:
+      - name: review_id
+        description: Primary key of the review.
+        tests:
+          - unique
+          - not_null
+      - name: order_id
+        description: Foreign key to stg_orders.order_id. An order may have more than one review.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: review_score
+        description: Integer star rating from the customer. Never null in the Olist extract.
+        tests:
+          - not_null
+      - name: review_comment_title
+        description: Optional short title the customer wrote with the review.
+      - name: review_comment_message
+        description: Optional free-text review body.
+      - name: review_creation_ts
+        description: When the review was created.
+      - name: review_answer_ts
+        description: When the review was answered or recorded by the marketplace.

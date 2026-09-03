@@ -18,7 +18,7 @@ sources:
           One or more rows per order describing how it was paid (type, installments, value).
           Raw grain is 1-to-many with orders; staging aggregates to one row per order_id.
       - name: order_reviews
-        description: Customer reviews tied to orders. Not required for customer_features.
+        description: Customer reviews tied to orders. Required staging for first-order review features.
       - name: orders
         description: One row per order, with status and lifecycle timestamps.
       - name: products
