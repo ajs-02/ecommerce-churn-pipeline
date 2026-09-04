@@ -3,8 +3,15 @@ version: 2
 models:
   - name: customer_features
     description: >
-      One row per customer_unique_id. Machine-learning feature table for repeat-buyer
-      propensity (label is derived from total_orders > 1; do not use total_orders as a predictor).
+      One row per customer_unique_id. Predictors come from the first delivered
+      order only (completed purchases). total_orders is the lifetime delivered
+      count and is label-only — do not use it as a predictor. average_order_value
+      equals total_spent under the first-order definition; do not pass both into
+      XGBoost. Imputation lives in the mart: mean + *_missing for delivery_days,
+      approval_days, and carrier_days; 0 + after_estimated_delivery_missing for
+      late days. Duration means and the review-score average are extract-wide
+      scalars; a later train/test split will see a global mart mean, not a
+      train-fold-only mean. Do not emit category_english or product_photos_qty.
     columns:
       - name: customer_unique_id
         description: Grain of the table. One person, possibly many order-scoped customer_ids.
@@ -12,18 +19,133 @@ models:
           - unique
           - not_null
       - name: customer_state
-        description: Most common state across the customer's order-scoped records.
+        description: >
+          Two-letter Brazilian state on the first delivered order's customer_id
+          (not the mode across lifetime orders).
+        tests:
+          - not_null
       - name: total_orders
-        description: Count of distinct delivered orders. Source of the repeat-buyer label.
+        description: >
+          Lifetime count of distinct delivered orders. Source of the repeat-buyer
+          label (repeat = total_orders > 1). Label-only — must not be a predictor.
         tests:
           - not_null
       - name: total_spent
-        description: Sum of staged order payment totals for delivered orders.
+        description: Payment total on the first delivered order (left-joined; missing payments coalesce to 0).
         tests:
           - not_null
       - name: average_order_value
-        description: total_spent divided by total_orders.
+        description: >
+          Equals total_spent under the first-order definition (kept for the
+          dashboard). Do not pass both this column and total_spent into XGBoost.
+        tests:
+          - not_null
       - name: days_since_last_purchase
-        description: Days between the latest delivered purchase timestamp and current_date.
+        description: >
+          Days between the first delivered purchase date and a frozen as_of_date
+          (dbt var as_of_date, else max order_purchase_ts::date). Name kept;
+          meaning is first/only purchase, not last-order recency vs current_date.
+        tests:
+          - not_null
       - name: favorite_payment_type
-        description: Payment type associated with the largest share of the customer's spend.
+        description: Staged favorite payment type on the first delivered order.
+        tests:
+          - not_null
+      - name: item_count
+        description: Line-item count on the first delivered order (no products join).
+        tests:
+          - not_null
+      - name: freight_value
+        description: Sum of item freight on the first delivered order.
+        tests:
+          - not_null
+      - name: used_voucher
+        description: >
+          True if any payment row on the first delivered order has
+          payment_type = voucher (split tenders still count).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - true
+                  - false
+      - name: delivery_days
+        description: >
+          Days from purchase to customer delivery on the first order
+          (extract(epoch from (end_ts - purchase_ts)) / 86400.0). Missing
+          timestamps are imputed with the extract-wide mean of observed
+          first-order values.
+        tests:
+          - not_null
+      - name: delivery_days_missing
+        description: True when delivery_days was imputed because the delivery timestamp was null.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - true
+                  - false
+      - name: approval_days
+        description: >
+          Days from purchase to approval on the first order. Missing timestamps
+          are imputed with the extract-wide mean of observed first-order values.
+        tests:
+          - not_null
+      - name: approval_days_missing
+        description: True when approval_days was imputed because the approval timestamp was null.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - true
+                  - false
+      - name: carrier_days
+        description: >
+          Days from purchase to carrier handoff on the first order. Missing
+          timestamps are imputed with the extract-wide mean of observed
+          first-order values.
+        tests:
+          - not_null
+      - name: carrier_days_missing
+        description: True when carrier_days was imputed because the carrier timestamp was null.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - true
+                  - false
+      - name: after_estimated_delivery
+        description: >
+          Calendar days late vs the first-order estimate (0 if delivered on or
+          before the estimate). Missing delivery or estimate timestamps are
+          imputed as 0; see after_estimated_delivery_missing.
+        tests:
+          - not_null
+      - name: after_estimated_delivery_missing
+        description: >
+          True when after_estimated_delivery was imputed as 0 because the
+          delivery or estimate timestamp was null.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - true
+                  - false
+      - name: review_below_average
+        description: >
+          True if any review on the first delivered order has review_score
+          strictly below the extract-wide avg(review_score). False if the
+          customer left no review or every score is at or above the average.
+          Never null.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - true
+                  - false
