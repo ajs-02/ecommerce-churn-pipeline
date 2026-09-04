@@ -1,5 +1,6 @@
 # Database & Data Processing
 pandas
+pyarrow
 psycopg2-binary
 sqlalchemy
 python-dotenv
@@ -9,7 +10,15 @@ dbt-postgres
 
 # Machine Learning & Notebooks
 scikit-learn
+xgboost
+imbalanced-learn
 jupyter
+seaborn
+plotly
+
+# Profiling
+ydata-profiling
 
 # Development
 black
+pytest

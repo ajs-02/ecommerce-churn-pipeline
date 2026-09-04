@@ -15,6 +15,10 @@ clean-targets:
   - "target"
   - "dbt_packages"
 
+vars:
+  # Frozen recency date (YYYY-MM-DD). Unset → max(order_purchase_ts)::date from stg_orders.
+  as_of_date: null
+
 models:
   ecommerce_transform:
     staging:
