@@ -140,10 +140,16 @@ models:
                   - false
 
   - name: stg_order_reviews
-    description: One row per review. Grain stays at review_id; do not collapse to order in staging.
+    description: >
+      One row per review_id. Grain stays at review, not order. Duplicate
+      review_ids in the extract (same review on multiple order_ids) are source
+      errors; staging keeps the first occurrence (earliest review_creation_ts,
+      then order_id).
     columns:
       - name: review_id
-        description: Primary key of the review.
+        description: >
+          Primary key after deduplicating source errors that reused the same
+          review_id on more than one order_id.
         tests:
           - unique
           - not_null

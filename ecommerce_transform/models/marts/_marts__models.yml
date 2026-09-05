@@ -31,7 +31,11 @@ models:
         tests:
           - not_null
       - name: total_spent
-        description: Payment total on the first delivered order (left-joined; missing payments coalesce to 0).
+        description: >
+          Payment total on the first delivered order (left-joined). If that
+          order has no payment rows, use sum(item_price + freight_value)
+          instead of 0 (one known Olist gap). A warn-level singular test
+          compares this to the item total (tolerance 0.01).
         tests:
           - not_null
       - name: average_order_value

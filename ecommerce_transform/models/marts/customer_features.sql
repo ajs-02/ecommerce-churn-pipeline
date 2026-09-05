@@ -10,6 +10,9 @@
 -- first-order frame. A later train/test split will see a global mart mean, not
 -- a train-fold-only mean.
 -- Do not join products or translation; do not emit category or photo columns.
+-- One delivered first order has no payment rows (Olist source gap). For that
+-- case, total_spent / average_order_value use sum(item_price + freight_value)
+-- instead of coalescing payment total to 0. favorite_payment_type stays null.
 
 with as_of as (
     select
@@ -74,7 +77,8 @@ first_order_items as (
     select
         fo.order_id,
         count(*) as item_count,
-        sum(i.freight_value) as freight_value
+        sum(i.freight_value) as freight_value,
+        sum(i.item_price + i.freight_value) as item_spend
     from first_order fo
     inner join {{ ref('stg_order_items') }} i
         on fo.order_id = i.order_id
@@ -139,8 +143,16 @@ select
     rd.customer_unique_id,
     rd.customer_state,
     lt.total_orders,
-    rd.total_payment_value as total_spent,
-    rd.total_payment_value as average_order_value,
+    case
+        when rd.favorite_payment_type is null
+        then coalesce(foi.item_spend, 0)
+        else rd.total_payment_value
+    end as total_spent,
+    case
+        when rd.favorite_payment_type is null
+        then coalesce(foi.item_spend, 0)
+        else rd.total_payment_value
+    end as average_order_value,
     (ao.as_of_date - rd.order_purchase_ts::date) as days_since_last_purchase,
     rd.favorite_payment_type,
     coalesce(foi.item_count, 0) as item_count,
