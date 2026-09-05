@@ -1,3 +1,4 @@
+# Typed Olist staging + customer_features mart (repeat-buyer scoring on Postgres).
 name: 'ecommerce_transform'
 version: '1.0.0'
 config-version: 2

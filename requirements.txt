@@ -1,3 +1,4 @@
+# Olist repeat-buyer pipeline: ingest, dbt, XGBoost scoring, profiling, tests.
 # Database & Data Processing
 pandas
 pyarrow

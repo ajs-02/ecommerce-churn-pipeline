@@ -1,15 +1,13 @@
-Welcome to your new dbt project!
+# ecommerce_transform
 
-### Using the starter project
+dbt project on PostgreSQL for the Olist repeat-buyer pipeline. Typed staging models clean the nine-table extract; `customer_features` is the customer-grain mart used for training and the Power BI score table.
 
-Try running the following commands:
-- dbt run
-- dbt test
+Staging is views; the mart is a table. Recency uses `var('as_of_date')` when set, otherwise the latest purchase date in the extract.
 
+```
+dbt run
+dbt test
+dbt docs generate
+```
 
-### Resources:
-- Learn more about dbt [in the docs](https://docs.getdbt.com/docs/introduction)
-- Check out [Discourse](https://discourse.getdbt.com/) for commonly asked questions and answers
-- Join the [chat](https://community.getdbt.com/) on Slack for live discussions and support
-- Find [dbt events](https://events.getdbt.com) near you
-- Check out [the blog](https://blog.getdbt.com/) for the latest news on dbt's development and best practices
+Profiles read `POSTGRES_*` from the environment. See the repo root README for setup and design notes.
