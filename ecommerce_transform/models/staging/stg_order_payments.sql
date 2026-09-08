@@ -10,7 +10,8 @@ aggregated as (
         order_id,
         sum(payment_value) as total_payment_value,
         max(payment_installments) as max_installments,
-        count(*) as payment_row_count
+        count(*) as payment_row_count,
+        bool_or(payment_type = 'voucher') as used_voucher
     from source
     group by order_id
 ),
@@ -31,6 +32,7 @@ select
     a.total_payment_value,
     a.max_installments,
     a.payment_row_count,
+    a.used_voucher,
     r.payment_type as favorite_payment_type
 from aggregated a
 inner join ranked r
