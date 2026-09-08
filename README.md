@@ -24,6 +24,12 @@ A few choices keep the score honest for one-time buyers:
 
 Local development uses CSVs and/or local Postgres. The same models run against Heroku Postgres for the live dashboard.
 
+## Dashboard
+
+Power BI reads the scored `customer_features` table from Postgres: repeat-purchase probability plus first-order spend, delivery, review, and geography fields. The report has an executive retention summary and a logistics deep dive (delivery speed, vouchers, late deliveries vs. negative reviews by state and spend tier).
+
+![Olist Customer Churn Analysis dashboard](Power%20BI/Dashboard%20Recording.gif)
+
 ## Stack
 
 | Layer | Tools |
