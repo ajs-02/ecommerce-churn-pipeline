@@ -33,3 +33,7 @@ dbt docs generate
 ```
 
 Run from ecommerce_transform with POSTGRES_* set for the chosen target. Generated target/manifest.json, catalog.json and index.html are local artifacts ignored by Git.
+
+## Anchor feature and census relations
+
+customer_feature_diagnostics has exactly one row per stable customer with at least one delivered order, before predictor eligibility. first_delivered_order_id references stg_orders; purchase then order-ID ordering selects the anchor before exclusions. Each diagnostic row retains source event timestamps, recovered/unknown sums, target metadata, overlapping exclusion and warning arrays, and eligibility. customer_features selects eligible diagnostic rows with an explicit predictor/metadata projection. No later delivered order replaces an excluded anchor. Both relations retain uncertain target labels; total_orders is descriptive only. Diagnostic export preserves exclusive reason-pattern counts so reason overlaps do not inflate customer exclusions.

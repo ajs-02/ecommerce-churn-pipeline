@@ -401,7 +401,7 @@ def test_global_review_threshold_presence_and_equality(staging):
             text(
                 "INSERT INTO order_reviews VALUES (:rid,:o,5,NULL,NULL,'2018-02-02','2018-02-03')"
             ),
-            {"rid": "f" * 32, "o": later},
+            {"rid": "1" * 32, "o": later},
         )
     run_features()
     with staging.connect() as conn:
@@ -599,3 +599,31 @@ def test_diagnostic_export_absent_mart_is_truthful(staging, tmp_path):
     )
     assert result.returncode != 0
     assert "run dbt first" in result.stdout
+
+
+def test_export_write_failure_preserves_previous_complete_evidence(
+    staging, tmp_path, monkeypatch
+):
+    import export_feature_diagnostics as diagnostics
+    import pandas as pd
+    import hashlib
+
+    run_features()
+    diagnostics.export_feature_diagnostics(tmp_path / "export")
+    before = {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in (tmp_path / "export").iterdir()
+    }
+
+    def fail_write(frame, path, *args, **kwargs):
+        Path(path).write_bytes(b"partial parquet")
+        raise OSError("Injected export filesystem failure")
+
+    monkeypatch.setattr(pd.DataFrame, "to_parquet", fail_write)
+    with pytest.raises(OSError):
+        diagnostics.export_feature_diagnostics(tmp_path / "export")
+    after = {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in (tmp_path / "export").iterdir()
+    }
+    assert after == before

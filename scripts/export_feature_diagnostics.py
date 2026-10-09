@@ -2,6 +2,9 @@
 
 import argparse
 import json
+import shutil
+import sys
+import tempfile
 from pathlib import Path
 
 from sqlalchemy import text, inspect
@@ -109,33 +112,66 @@ def load_feature_census(connection):
 
 
 def export_feature_diagnostics(output_dir):
-    output = Path(output_dir)
-    output.mkdir(parents=True, exist_ok=True)
+    """Publish a complete snapshot; retain the prior export on write/promotion failure."""
+    output = Path(output_dir).resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
     engine = get_db_engine()
     try:
-        with engine.connect().execution_options(
-            isolation_level="REPEATABLE READ"
-        ) as conn:
-            with conn.begin():
-                census = load_feature_census(conn)
-                # Separate bounded parts avoid guessing nullable Arrow schemas from the first batch.
-                for stale in output.glob("candidates-*.parquet"):
-                    stale.unlink()
-                for index, frame in enumerate(
-                    iter_sql_frames(
-                        text(
-                            "SELECT * FROM customer_feature_diagnostics ORDER BY customer_unique_id"
-                        ),
-                        conn,
+        with tempfile.TemporaryDirectory(
+            prefix=".feature-export-", dir=output.parent
+        ) as temporary:
+            candidate = Path(temporary) / "candidate"
+            candidate.mkdir()
+            with engine.connect().execution_options(
+                isolation_level="REPEATABLE READ"
+            ) as conn:
+                with conn.begin():
+                    census = load_feature_census(conn)
+                    # Separate bounded parts avoid guessing nullable Arrow schemas from the first batch.
+                    for index, frame in enumerate(
+                        iter_sql_frames(
+                            text(
+                                "SELECT * FROM customer_feature_diagnostics ORDER BY customer_unique_id"
+                            ),
+                            conn,
+                        )
+                    ):
+                        frame.to_parquet(
+                            candidate / f"candidates-{index:05d}.parquet", index=False
+                        )
+                    (candidate / "census.json").write_text(
+                        json.dumps(census, indent=2, default=str) + "\n",
+                        encoding="utf-8",
                     )
-                ):
-                    frame.to_parquet(
-                        output / f"candidates-{index:05d}.parquet", index=False
+            # The backup stays outside temporary cleanup, matching acquisition promotion.
+            backup = Path(
+                tempfile.mkdtemp(prefix=".feature-previous-", dir=output.parent)
+            ).resolve()
+            assert backup.parent == output.parent
+            backup.rmdir()
+            had_previous = output.exists()
+            if had_previous:
+                output.rename(backup)
+            try:
+                candidate.rename(output)
+            except OSError:
+                if had_previous:
+                    try:
+                        backup.rename(output)
+                    except OSError:
+                        raise ValueError(
+                            f"Export publication failed; previous evidence retained at {backup}"
+                        ) from None
+                raise
+            if backup.exists():
+                try:
+                    shutil.rmtree(backup)
+                except OSError:
+                    print(
+                        f"Published complete export; previous backup retained at {backup}",
+                        file=sys.stderr,
                     )
-                (output / "census.json").write_text(
-                    json.dumps(census, indent=2, default=str) + "\n", encoding="utf-8"
-                )
-        return census
+            return census
     finally:
         engine.dispose()
 
