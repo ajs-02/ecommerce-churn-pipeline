@@ -117,73 +117,84 @@ def validate_dataset(data_dir: Path | str, *, source: dict[str, str]) -> dict:
             raise DatasetValidationError(
                 f"{name}: unreadable or malformed CSV"
             ) from None
-        seen_keys = set()
-        for frame in frames:
-            for field in schema.split():
-                if field not in frame.columns:
-                    raise DatasetValidationError(
-                        f"{name}: {field}: missing required column"
-                    )
-            for field in frame.columns:
-                if field in {
-                    "customer_id",
-                    "customer_unique_id",
-                    "order_id",
-                    "product_id",
-                    "seller_id",
-                    "review_id",
-                }:
-                    if not frame[field].str.fullmatch(r"[0-9a-f]{32}").all():
-                        raise DatasetValidationError(f"{name}: {field}: invalid key")
-            for field in NUMBERS & set(frame.columns):
-                for value in frame[field]:
-                    if value == "" and field not in REQUIRED:
-                        continue
-                    try:
-                        number = Decimal(value)
-                        valid = number.is_finite()
-                        if valid and field in MONEY:
-                            valid = number >= 0
-                        if valid and field in INTEGERS:
-                            valid = number == number.to_integral_value()
-                        if valid and field in {"order_item_id", "payment_sequential"}:
-                            valid = number > 0
-                    except InvalidOperation:
-                        valid = False
-                    if not valid:
-                        raise DatasetValidationError(f"{name}: {field}: invalid number")
-            key = UNIQUE_KEYS.get(name)
-            if key:
-                key_frame = frame[key].copy()
-                for field in set(key) & INTEGERS:
-                    key_frame[field] = key_frame[field].map(Decimal)
-                key_rows = list(key_frame.itertuples(index=False, name=None))
-                if key_frame.duplicated().any() or any(
-                    row in seen_keys for row in key_rows
+        with frames:
+            seen_keys = set()
+            for frame in frames:
+                for field in schema.split():
+                    if field not in frame.columns:
+                        raise DatasetValidationError(
+                            f"{name}: {field}: missing required column"
+                        )
+                for field in frame.columns:
+                    if field in {
+                        "customer_id",
+                        "customer_unique_id",
+                        "order_id",
+                        "product_id",
+                        "seller_id",
+                        "review_id",
+                    }:
+                        if not frame[field].str.fullmatch(r"[0-9a-f]{32}").all():
+                            raise DatasetValidationError(
+                                f"{name}: {field}: invalid key"
+                            )
+                for field in NUMBERS & set(frame.columns):
+                    for value in frame[field]:
+                        if value == "" and field not in REQUIRED:
+                            continue
+                        try:
+                            number = Decimal(value)
+                            valid = number.is_finite()
+                            if valid and field in MONEY:
+                                valid = number >= 0
+                            if valid and field in INTEGERS:
+                                valid = number == number.to_integral_value()
+                            if valid and field in {
+                                "order_item_id",
+                                "payment_sequential",
+                            }:
+                                valid = number > 0
+                        except InvalidOperation:
+                            valid = False
+                        if not valid:
+                            raise DatasetValidationError(
+                                f"{name}: {field}: invalid number"
+                            )
+                key = UNIQUE_KEYS.get(name)
+                if key:
+                    key_frame = frame[key].copy()
+                    for field in set(key) & INTEGERS:
+                        key_frame[field] = key_frame[field].map(Decimal)
+                    key_rows = list(key_frame.itertuples(index=False, name=None))
+                    if key_frame.duplicated().any() or any(
+                        row in seen_keys for row in key_rows
+                    ):
+                        raise DatasetValidationError(
+                            f"{name}: {','.join(key)}: duplicate key"
+                        )
+                    seen_keys.update(key_rows)
+                for field in TIMESTAMPS & set(frame.columns):
+                    for value in frame[field]:
+                        if value == "" and field not in REQUIRED:
+                            continue
+                        try:
+                            if not re.fullmatch(
+                                r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?",
+                                value,
+                            ):
+                                raise ValueError
+                            datetime.fromisoformat(value)
+                        except ValueError:
+                            raise DatasetValidationError(
+                                f"{name}: {field}: invalid timestamp"
+                            ) from None
+                if (
+                    "order_status" in frame
+                    and not frame["order_status"].isin(STATUSES).all()
                 ):
                     raise DatasetValidationError(
-                        f"{name}: {','.join(key)}: duplicate key"
+                        f"{name}: order_status: invalid status"
                     )
-                seen_keys.update(key_rows)
-            for field in TIMESTAMPS & set(frame.columns):
-                for value in frame[field]:
-                    if value == "" and field not in REQUIRED:
-                        continue
-                    try:
-                        if not re.fullmatch(
-                            r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?", value
-                        ):
-                            raise ValueError
-                        datetime.fromisoformat(value)
-                    except ValueError:
-                        raise DatasetValidationError(
-                            f"{name}: {field}: invalid timestamp"
-                        ) from None
-            if (
-                "order_status" in frame
-                and not frame["order_status"].isin(STATUSES).all()
-            ):
-                raise DatasetValidationError(f"{name}: order_status: invalid status")
         with path.open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
         files[name] = {
