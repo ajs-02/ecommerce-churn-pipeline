@@ -75,6 +75,7 @@ desktop.ini
 # Docs
 docs/*
 !docs/project_spec.md
+!docs/implementation_gap.md
 
 # Logs
 *.log
