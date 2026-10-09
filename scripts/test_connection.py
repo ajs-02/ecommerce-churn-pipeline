@@ -1,42 +1,23 @@
-import os
 import sys
-
-import psycopg2
-from dotenv import load_dotenv
-
-load_dotenv()
-
-
-def _public_error(exc: Exception) -> str:
-    message = f"{type(exc).__name__}: {exc}"
-    secret = os.getenv("POSTGRES_PASSWORD")
-    if secret:
-        message = message.replace(secret, "***")
-    return message
+from upload_data import get_db_engine, public_error
+from sqlalchemy import text
 
 
 def main() -> int:
-    host = os.getenv("POSTGRES_HOST")
+    engine = None
     try:
-        connection = psycopg2.connect(
-            host=host,
-            database=os.getenv("POSTGRES_DB"),
-            user=os.getenv("POSTGRES_USER"),
-            password=os.getenv("POSTGRES_PASSWORD"),
-            port=os.getenv("POSTGRES_PORT"),
-        )
-        cursor = connection.cursor()
-        cursor.execute("SELECT version();")
-        db_version = cursor.fetchone()
-        print(f"Successfully connected to PostgreSQL at {host}.")
-        print(f"Database version: {db_version[0]}")
-        cursor.close()
-        connection.close()
+        engine = get_db_engine()
+        with engine.connect() as connection:
+            version = connection.execute(text("SELECT version()")).scalar()
+        print("Successfully connected to configured PostgreSQL target.")
+        print(f"Database version: {version}")
         return 0
     except Exception as error:
-        print(" Failed to connect to the database.")
-        print(f"Error: {_public_error(error)}")
+        print(f"Failed to connect to the database. {public_error(error)}")
         return 1
+    finally:
+        if engine is not None:
+            engine.dispose()
 
 
 if __name__ == "__main__":

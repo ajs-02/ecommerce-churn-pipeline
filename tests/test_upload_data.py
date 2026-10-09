@@ -19,24 +19,17 @@ class UploadDataTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(upload_data.upload_csvs_to_postgres(tmp), 1)
 
-    def test_read_csv_uses_pyarrow_and_does_not_connect(self):
-        calls = []
-
-        def fake_read(path, **kwargs):
-            calls.append(kwargs)
-            raise RuntimeError("stop after read")
-
+    def test_incomplete_dataset_does_not_connect(self):
         with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / "olist_customers_dataset.csv").write_text("a\n1\n", encoding="utf-8")
-            with patch.object(upload_data.pd, "read_csv", fake_read), patch.object(
-                upload_data, "get_db_engine", side_effect=AssertionError("engine called")
+            (Path(tmp) / "olist_customers_dataset.csv").write_text(
+                "a\n1\n", encoding="utf-8"
+            )
+            with patch.object(
+                upload_data,
+                "get_db_engine",
+                side_effect=AssertionError("engine called"),
             ):
-                code = upload_data.upload_csvs_to_postgres(tmp)
-
-        self.assertEqual(code, 1)
-        self.assertEqual(calls[0]["engine"], "pyarrow")
-        self.assertEqual(calls[0]["dtype_backend"], "pyarrow")
-        self.assertNotIn("chunksize", calls[0])
+                self.assertEqual(upload_data.upload_csvs_to_postgres(tmp), 1)
 
 
 if __name__ == "__main__":

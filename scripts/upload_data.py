@@ -1,11 +1,20 @@
 import os
+import hashlib
 import re
 import sys
 from pathlib import Path
 
 import pandas as pd
+from dataset_manifest import (
+    SCHEMAS,
+    validate_dataset,
+    DatasetValidationError,
+    validate_saved_manifest,
+)
+from arrow_loaders import iter_csv_frames
 from dotenv import load_dotenv
 from psycopg2 import sql as psql
+from psycopg2.extras import execute_values
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
 
@@ -24,14 +33,20 @@ def get_db_engine():
     port = os.getenv("POSTGRES_PORT", "5432")
     db = os.getenv("POSTGRES_DB")
 
-    missing = [name for name, val in [
-        ("POSTGRES_USER", user),
-        ("POSTGRES_PASSWORD", password),
-        ("POSTGRES_HOST", host),
-        ("POSTGRES_DB", db),
-    ] if not val]
+    missing = [
+        name
+        for name, val in [
+            ("POSTGRES_USER", user),
+            ("POSTGRES_PASSWORD", password),
+            ("POSTGRES_HOST", host),
+            ("POSTGRES_DB", db),
+        ]
+        if not val
+    ]
     if missing:
-        raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+        raise ValueError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
 
     db_url = URL.create(
         drivername="postgresql+psycopg2",
@@ -56,34 +71,23 @@ def table_name_for(filename: str) -> str:
     return name
 
 
-def _public_error(exc: Exception) -> str:
-    message = f"{type(exc).__name__}: {exc}"
-    secret = os.getenv("POSTGRES_PASSWORD")
-    if secret:
-        message = message.replace(secret, "***")
-    return message
+def public_error(exc: Exception) -> str:
+    if isinstance(exc, DatasetValidationError):
+        return str(exc)
+    return f"{type(exc).__name__}: operation failed; check configuration and dataset."
 
 
 def _insert_page_size(column_count: int) -> int:
     return max(1, 60000 // max(column_count, 1))
 
 
-def _drop_table(conn, table_name: str) -> None:
-    raw = conn.connection
-    cursor = raw.cursor()
-    try:
-        cursor.execute(
-            psql.SQL("DROP TABLE IF EXISTS {} CASCADE").format(psql.Identifier(table_name))
-        )
-    finally:
-        cursor.close()
-
-
 def upload_csvs_to_postgres(data_dir: Path | str | None = None) -> int:
     data_dir = Path(data_dir) if data_dir else DATA_DIR
 
     if not data_dir.is_dir():
-        print(f"Directory {data_dir} not found. Please ensure your CSVs are in the 'data' folder.")
+        print(
+            f"Directory {data_dir} not found. Please ensure your CSVs are in the 'data' folder."
+        )
         return 1
 
     csv_files = sorted(path.name for path in data_dir.glob("*.csv"))
@@ -91,36 +95,96 @@ def upload_csvs_to_postgres(data_dir: Path | str | None = None) -> int:
         print("No CSV files found in the data directory.")
         return 1
 
-    print(f"Found {len(csv_files)} files. Starting upload...\n")
-    frames: list[tuple[str, pd.DataFrame, str]] = []
     try:
-        for file in csv_files:
-            file_path = data_dir / file
-            print(f"Reading {file}...")
-            frame = pd.read_csv(file_path, engine="pyarrow", dtype_backend="pyarrow")
-            frames.append((table_name_for(file), frame, file))
+        manifest = validate_dataset(data_dir, source={"mode": "upload"})
+        validate_saved_manifest(data_dir, manifest)
+        csv_files = list(SCHEMAS)
     except Exception as exc:
-        print(f" Failed to read CSV. Error: {_public_error(exc)}\n")
+        print(f" Failed to validate dataset. Error: {public_error(exc)}")
         return 1
 
-    uploaded: list[tuple[str, str, int]] = []
+    print(f"Found {len(csv_files)} files. Starting upload...\n")
+    uploaded = []
+    engine = None
     try:
         engine = get_db_engine()
         with engine.begin() as conn:
-            for table_name, frame, file in frames:
-                _drop_table(conn, table_name)
-                frame.to_sql(
-                    name=table_name,
-                    con=conn,
-                    if_exists="replace",
-                    index=False,
-                    method="multi",
-                    chunksize=_insert_page_size(len(frame.columns)),
-                )
-                uploaded.append((file, table_name, len(frame)))
+            cursor = conn.connection.cursor()
+            try:
+                for file in csv_files:
+                    table_name = table_name_for(file)
+                    stage_name = "_upload_" + table_name
+                    columns = manifest["files"][file]["columns"]
+                    cursor.execute(
+                        psql.SQL("CREATE TEMP TABLE {} ({}) ON COMMIT DROP").format(
+                            psql.Identifier(stage_name),
+                            psql.SQL(", ").join(
+                                psql.SQL("{} TEXT").format(psql.Identifier(column))
+                                for column in columns
+                            ),
+                        )
+                    )
+                    count = 0
+                    for frame in iter_csv_frames(data_dir / file):
+                        statement = psql.SQL("INSERT INTO {} VALUES %s").format(
+                            psql.Identifier(stage_name)
+                        )
+                        rows = [
+                            tuple(None if pd.isna(value) else value for value in row)
+                            for row in frame.itertuples(index=False, name=None)
+                        ]
+                        execute_values(
+                            cursor,
+                            statement,
+                            rows,
+                            page_size=_insert_page_size(len(columns)),
+                        )
+                        count += len(frame)
+                    with (data_dir / file).open("rb") as stream:
+                        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+                    if digest != manifest["files"][file]["sha256"]:
+                        raise ValueError(f"{file}: content changed while loading")
+                    if count != manifest["files"][file]["row_count"]:
+                        raise ValueError(f"{file}: row count changed while loading")
+                    uploaded.append((file, table_name, count))
+                for file, table_name, _ in uploaded:
+                    target = psql.Identifier(table_name)
+                    stage = psql.Identifier("_upload_" + table_name)
+                    columns = psql.SQL(", ").join(
+                        psql.Identifier(column)
+                        for column in manifest["files"][file]["columns"]
+                    )
+                    cursor.execute(
+                        psql.SQL("CREATE TABLE IF NOT EXISTS {} (LIKE {})").format(
+                            target, stage
+                        )
+                    )
+                    cursor.execute(psql.SQL("DELETE FROM {}").format(target))
+                    cursor.execute(
+                        "SELECT attname, format_type(atttypid, atttypmod) FROM pg_attribute WHERE attrelid = %s::regclass AND attnum > 0 AND NOT attisdropped",
+                        (table_name,),
+                    )
+                    types = dict(cursor.fetchall())
+                    selected = psql.SQL(", ").join(
+                        psql.SQL("CAST({} AS {})").format(
+                            psql.Identifier(column), psql.SQL(types[column])
+                        )
+                        for column in manifest["files"][file]["columns"]
+                    )
+                    cursor.execute(
+                        psql.SQL("INSERT INTO {} ({}) SELECT {} FROM {}").format(
+                            target, columns, selected, stage
+                        )
+                    )
+            finally:
+                cursor.close()
     except Exception as exc:
-        print(f" Failed to upload CSV. Error: {_public_error(exc)}\n")
+        print(f" Failed to upload CSV. Error: {public_error(exc)}\n")
         return 1
+
+    finally:
+        if engine is not None:
+            engine.dispose()
 
     for file, table_name, row_count in uploaded:
         print(
