@@ -1,7 +1,8 @@
+# Tested end-to-end runtime: Python 3.12. ydata-profiling requires Python <3.14.
 # Olist repeat-buyer pipeline: ingest, dbt, XGBoost scoring, profiling, tests.
 # Database & Data Processing
-pandas
-pyarrow
+pandas==2.3.3
+pyarrow==26.0.0
 kaggle==2.2.4
 psycopg2-binary
 sqlalchemy
@@ -19,7 +20,8 @@ seaborn
 plotly
 
 # Profiling
-ydata-profiling
+ydata-profiling==4.18.4
+setuptools==80.10.2
 
 # Development
 black
