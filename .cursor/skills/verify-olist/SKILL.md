@@ -64,7 +64,7 @@ Commands the recipes use:
 
 Upload and `dbt run` need `--allow-shared-write` before `--`, and only when a reload of the shared warehouse is intended. The harness exits `3` and writes no transcript when that flag is missing.
 
-`test_connection.py` exits `0` even when the connection fails, and its success line says "Heroku" for whatever host `.env` names. The harness exit code is `0` only when stdout contains `Successfully connected`. Use `harness_exit_code` in the transcript, not the script's own exit code.
+`test_connection.py` exits `1` when the connection fails. The success line names the host from the environment and does not hardcode Heroku. The harness passes only when the script exits `0` and stdout contains `Successfully connected`.
 
 Stable handles are those command lines, the stdout tokens `Successfully connected`, `PASS`, `FAIL`, `Completed successfully`, and `Done.`, and the doctor keys above. Do not drive by clicking the Power BI file.
 

@@ -10,7 +10,7 @@ The Kaggle Olist extract is production-shaped, not a toy table.
 
 - About 100,000 orders and 96,000 unique customers across nine related tables (customers, orders, items, payments, reviews, products, sellers, geolocation, category translation)
 - Repeat buyers are roughly 3% of customers, so accuracy is the wrong headline metric
-- Split tenders, missing lifecycle timestamps, and a small number of source-quality issues are handled in SQL rather than ignored
+- Split tenders and a small number of source-quality issues are handled in SQL. Customers whose first delivered order lacks an approval, carrier, delivery, or estimate timestamp are omitted from the mart.
 
 ## Design
 
@@ -19,7 +19,7 @@ A few choices keep the score honest for one-time buyers:
 - **First-order window.** Predictors come from the first delivered order only. Lifetime order count is the label source and is never a model input.
 - **Frozen recency.** Days since purchase are measured against a fixed as-of date, not `current_date` or the last order.
 - **No label reconstruction.** Spend, payment type, voucher use, items, freight, reviews, and delivery times are not computed from later orders. Average order value is kept for the dashboard; it is not passed into the model alongside spend.
-- **Warehouse-owned features.** Typed dbt staging, one customer-grain mart, and imputation with missingness flags live in Postgres. Python trains and writes scores; it does not redefine the feature window.
+- **Warehouse-owned features.** Typed dbt staging and one customer-grain mart live in Postgres. The mart omits customers whose first delivered order is missing a lifecycle timestamp. Python trains and writes scores. It does not redefine the feature window or fill those timestamps.
 - **Imbalance.** Training uses SMOTE on the train split only, plus XGBoost `scale_pos_weight`. Evaluation is PR-AUC, F1, and a confusion matrix.
 
 Local development uses CSVs and/or local Postgres. The same models run against Heroku Postgres for the live dashboard.

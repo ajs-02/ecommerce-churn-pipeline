@@ -4,7 +4,7 @@
 
 Open that canvas beside the chat. It is the review surface for this snapshot. This file is the copy future agents can read from the repo when the canvas is not mounted. The canvas source on this machine is `C:\Users\prince\.cursor\projects\d-Projects-ecommerce-churn-pipeline-ecommerce-churn-pipeline\canvases\olist-implementation-gap.canvas.tsx`.
 
-This note is not the feature contract. `docs/project_spec.md` and `.cursor/rules/project.mdc` still govern `customer_features`. Do not change the mart to match the judgment below unless the spec and the rule change in the same edit.
+This note is not the feature contract. `docs/project_spec.md` and `.cursor/rules/project.mdc` govern `customer_features`. The exclusion is now that contract. A customer whose first delivered order lacks an approval, carrier, customer-delivery, or estimated-delivery timestamp is absent from the mart, and the four `*_missing` columns are not emitted. The census SQL below names those columns and describes the table before that change. Do not put the mean fill back.
 
 Reviewed commit `ea5de74`. Counts below were queried from `public.customer_features` on 8 Oct 2026. Re-run the census before treating a number as current.
 

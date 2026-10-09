@@ -25,7 +25,7 @@ Preconditions:
 
 ## Gotchas
 
-- This command always reads `data/`. It does not take a directory argument. An upload from another folder is not what it checks.
+- Pass a directory argument to check that folder. With no argument the command reads `data/`.
 - Counts are exact `COUNT(*)` values, not planner estimates.
 - A missing relation prints `FAIL` with the database error on that row. That is "upload has not been done", not a harness failure.
 - Geolocation is large. Wait for the process to exit. Do not kill it and read a partial transcript.

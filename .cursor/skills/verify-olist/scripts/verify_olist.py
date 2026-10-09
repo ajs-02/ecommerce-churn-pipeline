@@ -365,7 +365,9 @@ def doctor() -> int:
 def harness_exit(command: list[str], child_exit: int, stdout: str) -> int:
     joined = " ".join(command).replace("\\", "/").lower()
     if "test_connection.py" in joined:
-        return 0 if "Successfully connected" in stdout else 1
+        if child_exit == 0 and "Successfully connected" in stdout:
+            return 0
+        return 1
     return child_exit
 
 

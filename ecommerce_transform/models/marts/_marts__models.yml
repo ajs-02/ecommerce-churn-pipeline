@@ -3,15 +3,15 @@ version: 2
 models:
   - name: customer_features
     description: >
-      One row per customer_unique_id. Predictors come from the first delivered
-      order only (completed purchases). total_orders is the lifetime delivered
-      count and is label-only — do not use it as a predictor. average_order_value
-      equals total_spent under the first-order definition; do not pass both into
-      XGBoost. Imputation lives in the mart: mean + *_missing for delivery_days,
-      approval_days, and carrier_days; 0 + after_estimated_delivery_missing for
-      late days. Duration means and the review-score average are extract-wide
-      scalars; a later train/test split will see a global mart mean, not a
-      train-fold-only mean. Do not emit category_english or product_photos_qty.
+      One row per customer_unique_id whose first delivered order has non-null
+      approval, carrier, customer-delivery, and estimated-delivery timestamps.
+      Customers missing any of those timestamps on that first order are absent.
+      Predictors come from that order only. total_orders is the lifetime delivered
+      count and is label-only. Do not use it as a predictor. average_order_value
+      equals total_spent under the first-order definition. Do not pass both into
+      XGBoost. Do not impute durations and do not emit *_missing columns. The
+      review-score average is avg(review_score) over all of stg_order_reviews.
+      Do not emit category_english or product_photos_qty.
     columns:
       - name: customer_unique_id
         description: Grain of the table. One person, possibly many order-scoped customer_ids.
@@ -78,70 +78,30 @@ models:
                   - false
       - name: delivery_days
         description: >
-          Days from purchase to customer delivery on the first order
-          (extract(epoch from (end_ts - purchase_ts)) / 86400.0). Missing
-          timestamps are imputed with the extract-wide mean of observed
-          first-order values.
+          Days from purchase to customer delivery on the first delivered order
+          (extract(epoch from (end_ts - purchase_ts)) / 86400.0). Observed only.
+          A null delivery timestamp excludes the customer.
         tests:
           - not_null
-      - name: delivery_days_missing
-        description: True when delivery_days was imputed because the delivery timestamp was null.
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values:
-                  - true
-                  - false
       - name: approval_days
         description: >
-          Days from purchase to approval on the first order. Missing timestamps
-          are imputed with the extract-wide mean of observed first-order values.
+          Days from purchase to approval on the first delivered order. Observed
+          only. A null approval timestamp excludes the customer.
         tests:
           - not_null
-      - name: approval_days_missing
-        description: True when approval_days was imputed because the approval timestamp was null.
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values:
-                  - true
-                  - false
       - name: carrier_days
         description: >
-          Days from purchase to carrier handoff on the first order. Missing
-          timestamps are imputed with the extract-wide mean of observed
-          first-order values.
+          Days from purchase to carrier handoff on the first delivered order.
+          Observed only. A null carrier timestamp excludes the customer.
         tests:
           - not_null
-      - name: carrier_days_missing
-        description: True when carrier_days was imputed because the carrier timestamp was null.
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values:
-                  - true
-                  - false
       - name: after_estimated_delivery
         description: >
-          Calendar days late vs the first-order estimate (0 if delivered on or
-          before the estimate). Missing delivery or estimate timestamps are
-          imputed as 0; see after_estimated_delivery_missing.
+          Calendar days late versus the first delivered order's estimate (0 if
+          delivered on or before the estimate). A null delivery or estimate
+          timestamp excludes the customer. Do not store 0 for a missing timestamp.
         tests:
           - not_null
-      - name: after_estimated_delivery_missing
-        description: >
-          True when after_estimated_delivery was imputed as 0 because the
-          delivery or estimate timestamp was null.
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values:
-                  - true
-                  - false
       - name: review_below_average
         description: >
           True if any review on the first delivered order has review_score
