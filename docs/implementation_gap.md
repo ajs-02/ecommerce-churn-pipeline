@@ -22,6 +22,10 @@ Lifecycle-only warnings reconcile to the historical union of 1,337 customers: 16
 
 Durable evidence, source fingerprints, generated dbt docs, census JSON/Parquet and a portable PostgreSQL dump are under C:/Users/prince/.codex/visualizations/2026/10/09/01a11faf-27a8-7441-a7ba-1c98add13e78/pipeline-evidence/t04. Source CSVs were read only; the database was disposable. T05 remains the next implementation task; modeling and final personal selection remain deferred.
 
+## T05 implementation update, 9 October 2026
+
+T05 adds ten real PostgreSQL/ydata reports and an HTML index, shared cohort/state/numeric EDA and an executable output-cleared notebook. Fixture checks cover missing-mart failures, exact summaries, known-label state denominators, separate uncertain analysis, visible charts and preservation of previous report snapshots. Final full-data evidence and combined review are pending; the historical inventory below remains a pre-implementation snapshot.
+
 ## Current implementation
 
 Present: PostgreSQL dbt project, nine staging models, `customer_features` mart, YAML and five singular SQL tests, upload/validation/connection scripts, initial uploader/connection tests, the verify-olist CLI harness, requirements, and a Power BI file. Dev already excludes incomplete first-delivered timestamps without duration imputation/flags, permits unknown payment type, and tests the missing-payment-row fallback.

@@ -102,3 +102,6 @@ artifacts/
 *.log
 !docs/erd.md
 !docs/execution_log.md
+# Task-only profiling runtimes
+.python-runtime/
+.venv-profiling/
