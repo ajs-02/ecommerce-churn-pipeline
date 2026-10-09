@@ -1,6 +1,6 @@
 # ecommerce_transform
 
-dbt project on PostgreSQL for the Olist repeat-order exploration. Staging models clean the nine-table extract; `customer_features` is the customer-grain ML mart. T04 SQL implements the inclusive all-status180-day target, seconds-based anchor features and the shared eligibility census in [the specification](../docs/project_spec.md).
+dbt project on PostgreSQL for the Olist repeat-order exploration. Staging models clean the nine-table extract; `customer_features` is the customer-grain ML mart. T04 SQL implements the inclusive all-status 180-day target, seconds-based anchor features and the shared eligibility census in [the specification](../docs/project_spec.md).
 
 Staging is views; the mart is a table. Frozen recency uses `var('as_of_date')` when set, otherwise the latest purchase date in the extract. The planned prediction history is separate from the feature mart. Power BI remains unedited and its refresh may break after AOV removal and seconds/recency column renames.
 
