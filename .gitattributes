@@ -1,0 +1,2 @@
+tests/fixtures/olist_valid/*.csv text eol=lf
+tests/fixtures/olist_expected.json text eol=lf

@@ -2,6 +2,7 @@
 # Database & Data Processing
 pandas
 pyarrow
+kaggle
 psycopg2-binary
 sqlalchemy
 python-dotenv
