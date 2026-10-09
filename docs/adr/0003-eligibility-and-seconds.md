@@ -1,0 +1,3 @@
+# Exclude negative elapsed durations and preserve other chronology evidence
+
+Accepted 8 October 2026 after local CSV census. Deterministically recover anchor-order values, exclude unrecoverable predictor nulls/missing items and negative purchase-to-event durations, and retain other timeline inconsistencies with warnings. The census showed 163 negative-duration customers within 1,337 chronology anomalies; broad exclusion would remove additional observed repeat activity. Preserve raw records and expose losses/overlaps. Express duration/age predictors in seconds, converting calendar lateness and frozen-date recency by 86,400 to preserve their definitions.

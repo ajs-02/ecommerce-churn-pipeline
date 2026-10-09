@@ -1,241 +1,136 @@
-# Project Specification: Olist Repeat Buyer Propensity Pipeline
+# Olist repeat-order exploration specification
 
-## 1. Business Objectives
+Agreed with the user on 8 October 2026. This contract replaces the supplied specification and any older feature, lifetime-label, dashboard, or scheduled-training requirements. It describes the agreed design, not the current implementation status. See [implementation gaps](implementation_gap.md), [task plan](implementation_plan.md), and [acceptance matrix](test_acceptance_matrix.md).
 
-- **Goal:** Predict Repeat Purchase Probability for each customer on an e-commerce platform (who is likely to buy more than once).
-- **Use Case:** Enable the marketing team to allocate acquisition and retention budgets toward one-time buyers with a high propensity to become repeat customers, especially high-spend customers in that group.
-- **Deliverable:** An executive dashboard (Power BI/Tableau) showing Repeat Purchase Probability and segmenting customers into actionable cohorts (one-time vs likely repeat).
+## 1. Purpose and scope
 
-## 2. Data Objectives & Architecture
+Explore first-delivered-order features and indicators associated with repeat ordering, compare classifiers, and let the user personally select a model after reviewing evidence. This is historical exploratory classification. Retained post-purchase features and the inclusion of early positives limit prospective and probability interpretations.
 
-This is a repeat-buyer propensity pipeline on **PostgreSQL**. Local vs cloud is *where* the data lives, not a second warehouse. Do not add DuckDB, Streamlit, or star-schema KPI marts from `docs/ref/`.
+Use PostgreSQL for both local and Heroku execution. Download raw Olist CSVs into `data/`, load them into PostgreSQL, build dbt staging and one ML mart, then run analysis and experiments. CSV-only transformation or training, DuckDB, Streamlit, and reference star-schema marts are outside scope.
 
-```
-Download CSVs → data/
-  ├─ Local path: Pandas/PyArrow and/or load into local Postgres → dbt → train locally
-  └─ Cloud path: upload to Heroku Postgres → dbt → train_model.py upserts scores
-GitHub Actions (push to main + weekly cron): train against Heroku via GitHub Secrets
-Power BI/Tableau reads the predictions table
-```
+Power BI is finished and must remain unedited. Removing AOV or renaming features may break its refresh; document that consequence and defer repair. Automated training on pushes, weekly jobs, deployment, synthetic future-customer data, fitted probability calibration, and the information-arrival audit are deferred. kNN, SVM, and Naive Bayes are optional later experiments after initial results and runtime review.
 
-- **Acquire:** A download script writes the Kaggle Olist CSVs into `data/` (same role as the reference ingest, adapted to this repo).
-- **Local path:** Work from those CSVs with Pandas + PyArrow, and/or load them into local Postgres with `scripts/upload_data.py`, then run dbt and training locally.
-- **Cloud path:** Upload CSVs to Heroku Postgres, run dbt there, train, and upsert predictions so Power BI can refresh.
-- **Warehouse:** PostgreSQL only (local and/or Heroku). `profiles.yml` selects the target. DuckDB-only SQL (`arg_max`, etc.) must be rewritten for Postgres.
-- **Transformation (dbt):** Reference-style staging (typed, renamed, tested) in `ecommerce_transform/`, then one ML mart: `customer_features`.
-- **Machine Learning (Python):** Ingest `customer_features`, label repeat buyers (`total_orders` > 1), train XGBoost with SMOTE + `scale_pos_weight`, and **INSERT/UPDATE** predictions in Postgres. Add `xgboost` and `imbalanced-learn` to `requirements.txt`.
-- **Pandas:** Every `read_csv` / `read_sql` / tabular DataFrame load uses the PyArrow engine (`engine="pyarrow"` and/or `dtype_backend="pyarrow"`). `pyarrow` must be in `requirements.txt`.
-- **Secrets:** Local credentials live in `.env` (python-dotenv). CI maps GitHub Secrets onto the same `POSTGRES_*` names as `.env.example`. Never commit, log, or print secrets.
-- **Automation:** Code must be modular, reproducible, and fully tested.
+No performance claim, task acceptance, or candidate selection is automatic. The user reviews outputs, test cases, and outcomes before accepting a task.
 
----
+## 2. Customer, anchor, observation, and target
 
-## 3. Data Dictionary, Schema & Automated Profiling
+- Grain is exactly one row per `customer_unique_id`, joining orders through their order-specific `customer_id`.
+- Require at least one delivered order. Select the anchor by `order_purchase_ts`, then `order_id`, among delivered orders. Select it before eligibility filtering; never substitute a later complete order.
+- Set `target_window_end_ts = first_delivered_purchase_ts + interval '180 days'`.
+- A repeat is another distinct `order_id` purchased in the inclusive interval `[first_delivered_purchase_ts, target_window_end_ts]`. Include every status: delivered, shipped, canceled, unavailable, invoiced, processing, created, approved. Same-day and same-timestamp distinct orders count. Orders before the anchor do not count.
+- Default `observation_end_ts` is the maximum purchase timestamp across all recorded orders, including non-delivered orders. An explicit override is permitted, but it must not precede recorded purchases. Record the exact timestamp and its provenance. The default assumes the extract captures ordering activity through that timestamp; it does not prove coverage.
+- Complete follow-up means `target_window_end_ts <= observation_end_ts`.
+- `repeat_within_180_days` is `1` whenever a qualifying repeat is observed, including early positives; it is `0` when follow-up is complete and no repeat is observed; otherwise it is null.
+- Mix early positives with other labeled customers in the same random split. Do not create a separate early-positive training partition. Report their counts and the resulting selection bias.
+- Keep uncertain customers for analysis and scoring; do not assign them negative labels or compute classification metrics against their unknown outcomes.
+- Preserve source timestamps consistently without inventing a timezone or using the execution host's timezone. Record source timestamp interpretation.
 
-Cursor must ensure the project is fully documented and profiled to accelerate feature engineering and maintain a single source of truth for the data architecture.
+Required descriptive/target metadata includes `first_delivered_order_id`, `first_delivered_purchase_ts`, `target_window_end_ts`, `observation_end_ts`, `has_complete_followup`, and `repeat_within_180_days`. `total_orders` retains its existing lifetime delivered-order count for descriptive use only. It is no longer the target definition.
 
-### A. Schema Documentation (dbt docs)
+## 3. Predictors and units
 
-- **Files:** Use the reference convention: `models/staging/_staging__models.yml` and `models/marts/_marts__models.yml` (do not also maintain parallel `schema.yml` files).
-- **Descriptions:** Every model must include `description:` fields for both the table and its critical columns.
-- **Relationships:** Foreign keys (e.g., `customer_id` connecting orders and customers) must be defined with dbt `tests:` (e.g., `relationships`). The reference YAML does not include these; this project still requires them.
-- **Generation:** The pipeline must support running `dbt docs generate` to create a live data dictionary.
+Predictors use anchor-order records only. Preserve the extract-wide review threshold and frozen-date recency definitions. Use this explicit input allowlist; identifiers, timestamps, target metadata, follow-up flags, lifetime counts, and exclusion diagnostics are not predictors.
 
-### B. Entity-Relationship Visualization
+| Predictor | Definition |
+| --- | --- |
+| `customer_state` | State on the anchor order's customer record. |
+| `total_spent` | Sum all anchor payment values; only when payment rows are absent, recover from sum of item price plus freight. A null payment type alone does not trigger spend replacement. |
+| `seconds_since_first_purchase` | Frozen `as_of_date` minus anchor purchase date, multiplied by 86,400. This remains calendar-date age, not elapsed timestamp age. |
+| `favorite_payment_type` | Sum anchor payments by type, choose the largest total value, break ties alphabetically using deterministic ordering. Never invent a type when it is unknown. |
+| `item_count` | Number of anchor item lines, without join fan-out. Positive integer. |
+| `freight_value` | Sum anchor item freight. |
+| `used_voucher` | True if any anchor payment row has type `voucher`. |
+| `delivery_seconds` | Epoch seconds from purchase to customer delivery. |
+| `approval_seconds` | Epoch seconds from purchase to approval. |
+| `carrier_seconds` | Epoch seconds from purchase to carrier handoff. |
+| `after_estimated_delivery_seconds` | `max(customer_delivery_date - estimated_delivery_date, 0) * 86400`. This preserves calendar-day lateness; same-date delivery is zero regardless of time of day. |
+| `review_below_average` | True if any staged anchor review score is strictly below the average of all staged review scores. False for no review or all scores at/above average. |
+| `has_first_order_review` | True if at least one staged review belongs to the anchor; false otherwise. Later-order reviews do not affect it. |
 
-- Document the primary keys (PK) and foreign keys (FK) for the `customers`, `orders`, `order_items`, and `payments` tables.
-- Keep a record of the cardinality (e.g., 1-to-many between orders and payments **in raw data**).
-- Staging grain must match the tests: after staging, **payments are one row per `order_id`**, so `favorite_payment_type` and `total_spent` do not fan out.
+Use seconds consistently for all duration/age predictors and unit-explicit column names. Preserve fractional seconds for elapsed calculations. The 180-day business horizon does not change. `as_of_date` defaults to the date of the maximum recorded purchase timestamp; an explicit override must not yield negative recency.
 
-### C. Automated Data Profiling
+Remove `average_order_value`, `days_since_last_purchase`, `delivery_days`, `approval_days`, `carrier_days`, and the four duration `*_missing` flags. Replace the old recency/duration fields with their seconds names. Do not add category, photo, or later-order predictors.
 
-Cursor must generate a profiling script (`scripts/generate_data_profile.py`) that performs the following:
+## 4. Recovery, eligibility, and validity
 
-- Ingest the raw tables and the finalized `customer_features` table into Pandas using the **PyArrow** engine.
-- Support the same dual path as §2: local CSVs or Postgres.
-- Use the `ydata-profiling` library to export an interactive HTML report (`reports/data_profile_report.html`).
-- This report will automatically calculate and document:
-  - Data types (Boolean, Categorical, Numeric).
-  - Number of distinct/unique values per column.
-  - Percentage of missing/null values.
-  - High-cardinality warnings (e.g., too many unique zip codes to one-hot encode).
-  - Zero-variance warnings (columns that provide no predictive value).
+Preserve raw/staged records. Eligibility exclusions apply to the final feature mart, with customer counts and reasons exported for review. Count overlaps explicitly so exclusion totals do not double-count customers.
 
----
+1. Require the anchor's approval, carrier, customer-delivery, and estimated-delivery timestamps. Missing timestamps cannot be recovered from delivered status or invented values.
+2. Recover values only from existing anchor records. No mean/median fill, inferred payment types, absolute-valued durations, clipping of negative elapsed times, or later-order substitutions. An aggregate depending on a null constituent is unknown, not the sum of the remaining known values: propagate that null to the affected predictor and apply eligibility rules. A null payment amount does not count as absent payment rows or authorize item-spend replacement. Non-finite raw monetary values fail validation.
+3. Apply the specified no-review boolean definitions. Then exclude customers with remaining null selected predictors, including an unrecoverable payment type.
+4. Exclude anchors with no item records; do not manufacture zero items or freight from absent items.
+5. Exclude customers with negative purchase-to-approval, purchase-to-carrier, or purchase-to-customer-delivery elapsed durations. Report original timestamps and each reason.
+6. Retain other lifecycle-order violations with warnings: carrier before approval, customer delivery before carrier, or approval after customer delivery. Report overlapping and mutually exclusive patterns. Estimate-before-purchase is a warning diagnostic. Never silently repair these records.
 
-## 4. dbt Transformation & Testing Requirements
+Hard checks reject duplicates, malformed required keys, failed relationships, invalid statuses, non-finite numeric predictors, fractional/nonpositive item counts in the final mart, negative item prices, freight or payment amounts, negative model spend/freight/lateness, and invalid configuration producing negative recency. Raw monetary errors abort publication/build rather than silently excluding rows.
 
-Adopt the **scaffolding and tests** from `docs/ref/` (typed staging, YAML tests, singular tests), adapted to Postgres and this project's mart. Do **not** copy the reference star schema (`dim_*`, `fct_order_items`, monthly/category/delivery KPI marts).
+Legitimate zeros include freight, on-time lateness, recency on the same frozen calendar date, equal-timestamp elapsed durations, false booleans, and negative-class labels. Allow individual zero payment rows. Zero-priced items and zero aggregate spend trigger review warnings, not automatic exclusion. The payment-versus-item spend comparison remains a warning with tolerance 0.01. Missing delivered timestamps remain an order-level warning plus the agreed customer-level exclusion.
 
-### A. Staging Layer (`ecommerce_transform/models/staging/`)
+Large valid values are visible in profiling; do not add arbitrary upper cutoffs or winsorization. Test value identities against source records to detect corruption beyond sign checks.
 
-Each staging model must select explicit columns, cast types, and do light cleaning — **not** `SELECT *`. Use existing file names in this repo.
+## 5. Acquisition, upload, and staging
 
-Required models (typed columns, casts, YAML descriptions + unique/not_null + `relationships`; not `SELECT *`):
+Provide an idempotent Kaggle downloader for the nine Olist files, with an existing-files path, required-file validation, file hashes and a dataset manifest. Tests mock acquisition and require no Kaggle credentials/network. Do not overwrite a valid dataset with an incomplete download.
 
-- `stg_customers.sql` — includes an integer cast of `customer_zip_code_prefix`.
-- `stg_orders.sql`
-- `stg_order_items.sql` — one row per line; integer `order_item_id`.
-- `stg_order_payments.sql` — aggregate to **one row per `order_id`**, including a primary/favorite payment type (Postgres equivalent of the reference `arg_max`) and `used_voucher` (true if any payment row is `voucher`).
-- `stg_products.sql` — typed product attributes; required for item → product relationship tests. The mart does not join products or translation and must not add photo or category predictors.
-- `stg_order_reviews.sql` — typed review grain (`review_id`, `order_id`, integer `review_score`, comments, timestamps). Do not collapse to order in staging. Duplicate `review_id`s in the extract (same review on multiple `order_id`s) are source errors; keep the first occurrence (`distinct on (review_id)` ordered by `review_creation_ts`, then `order_id`) so `review_id` is unique.
+Upload all required raw tables as one dataset refresh. Load and validate temporary staging tables first; publish transactionally while preserving existing table identities/dependencies. Any file, chunk, or publication failure leaves the previous dataset intact and returns a nonzero exit status. Connection and validation scripts must also fail truthfully.
 
-Optional extra staging already in the repo (`stg_geolocation`, `stg_sellers`, `stg_product_category_name_translation`) may remain as unused `SELECT *`. They are not required for `customer_features`. Required staging stays typed and tested.
+Use Pandas with Arrow-backed tabular data. CSV reads must use `engine='pyarrow'` and/or `dtype_backend='pyarrow'`; SQL reads use `dtype_backend='pyarrow'`. Choose an Arrow-compatible chunk/stream strategy rather than passing unsupported chunk options to the Arrow CSV engine. `pyarrow` is required. Convert to estimator-compatible arrays/categories only at the ML boundary, with tested feature names and types.
 
-### B. Staging Tests (`models/staging/_staging__models.yml` plus singular tests)
+Keep credentials in `.env` through python-dotenv using `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`. Never log credentials or connection URLs. Local and Heroku target settings use the same contract; current runs are manual.
 
-YAML tests (reference coverage):
+Required typed staging: customers, orders, items, aggregated payments, products, reviews. Select explicit columns with casts and descriptions. Payments have one row per order. Items have unique `(order_id, order_item_id)`. Reviews preserve review grain, deduplicating source `review_id` by creation timestamp then order ID. Products support relationship checks but supply no model predictors. Optional unused geolocation/sellers/translation staging may remain.
 
-- **Uniqueness & Not Null:** `customer_id` unique + not_null; `customer_unique_id` not_null; `order_id` unique + not_null on orders; `order_id` unique + not_null on aggregated payments; `review_id` unique + not_null (after staging drops duplicate `review_id` source errors); `review_score` not_null; composite unique on items `(order_id, order_item_id)`.
-- **Accepted Values:** `order_status` must be one of the full Olist set: `delivered`, `shipped`, `canceled`, `unavailable`, `invoiced`, `processing`, `created`, `approved`. `used_voucher` is true or false.
-- **Referential Integrity:** `customer_id` in orders must exist in customers; `order_id` in payments, items, and reviews must exist in orders; `product_id` in items must exist in products (`relationships`).
+Use `_staging__models.yml` and `_marts__models.yml`, without parallel schema files. Include unique/not-null keys, full status and boolean accepted values, relationship checks, descriptions and critical-column tests. Support `dbt docs generate` and document PK/FK cardinalities, including raw split payments versus aggregated staged payments.
 
-Singular tests (ported from the reference, Postgres SQL):
+## 6. Profiling and EDA
 
-- No negative item price or freight (`stg_order_items`).
-- Delivered orders missing a delivery timestamp: `severity: warn` (known Olist quirk, ~8 rows).
-- `customer_features.total_spent` vs first-order `sum(item_price + freight_value)` (tolerance 0.01): `severity: warn` until we decide whether to keep the test.
+Provide `scripts/generate_data_profile.py`, per-table raw and feature reports, and `reports/data_profile_report.html` as their index. Default to PostgreSQL; optional CSV profiling inspects raw files only. Use ydata-profiling and Arrow-backed ingestion. Reports cover types, uniqueness/cardinality, missingness, zero variance, sign/zero/range checks, exclusions, timeline warnings, cohort counts and class proportions.
 
-### C. Mart Layer (`models/marts/customer_features.sql`)
+Provide executable `notebooks/01_eda_and_profiling.ipynb` using shared loader/validation code. It fails clearly with a 'run dbt first' message when the mart is absent. Include delivered-count and new-target distributions, first-order spend by target, top-five state repeat rates with denominators, numeric correlations excluding target metadata/identifiers/lifetime counts, and no AOV. Separate known-label comparisons from uncertain-customer summaries; report early positives and selection effects.
 
-Join staging tables to create **one row per `customer_unique_id`**. Predictors come from the **first delivered order** only so they match scoring one-time buyers. `total_orders` is the lifetime count of delivered orders and is **label-only** (repeat = `total_orders` > 1). Do not use it as a predictor.
+## 7. Partitions and candidates
 
-Delivered-only is intentional: timing features need delivery timestamps (completed purchases), not a silent extra-spec filter. Payments are **left joined**. If the first delivered order has no payment rows, `total_spent` and `average_order_value` use `sum(item_price + freight_value)` on that order instead of 0 (one known Olist gap: `830d5b7aaa3b6f1e9ad63703bec97d23` / `bfbd0f9bdef84302105ad712db648a6c`). `favorite_payment_type` stays null when payments are missing. Do not join products or translation. Do not emit `category_english` or `product_photos_qty`.
+Split the eligible labeled cohort randomly and stratifiably into 60% training, 20% development, 20% test, seed 42. Stable customer ordering and persisted membership make reruns reproducible. Stratified, shuffled 10-fold CV with seed 42 operates inside training only. Validate enough examples of each class exist; fail clearly rather than silently reducing folds. Uncertain customers enter no labeled partition.
 
-Recency uses a frozen `as_of_date`: dbt `var('as_of_date')` coalesced with `max(stg_orders.order_purchase_ts)::date`. `days_since_last_purchase` is as-of minus the **first** purchase date (name kept; meaning is first/only purchase). Do not use `current_date` or last-order recency.
+| Family | Initial variants |
+| --- | --- |
+| Baselines | All-negative; all-positive |
+| Logistic regression | Unweighted; class-weighted; SMOTENC without extra weighting |
+| Random forest | Unweighted; class-weighted; SMOTENC without extra weighting |
+| XGBoost | Unweighted; class-weighted; SMOTENC without extra weighting; SMOTENC plus weighting |
 
-Required column **names** stay (`customer_state`, `total_orders`, `total_spent`, `average_order_value`, `days_since_last_purchase`, `favorite_payment_type`) but **definitions** are first-order except `total_orders`:
+These are separate comparison candidates, not a stacking/voting ensemble. Fit numeric scaling and categorical encoding on training-fold records only. Treat booleans as categorical for SMOTENC; keep categories valid, then encode for the estimator. Handle unseen categories consistently. No statistical predictor imputation is permitted.
 
-- `customer_state` — state on the first order’s `customer_id` (not `mode()` across lifetime orders).
-- `total_orders` — lifetime delivered count (label source only).
-- `total_spent` — first-order payment total, or `sum(item_price + freight_value)` when that order has no payment rows. A singular test (`severity: warn`) compares it to the first-order item total (tolerance 0.01) so we can count payment-vs-item mismatches before deciding whether to keep the test.
-- `average_order_value` — equals `total_spent` under the first-order definition (kept for the dashboard; do not pass both into XGBoost).
-- `days_since_last_purchase` — as-of minus first purchase date.
-- `favorite_payment_type` — first-order staged favorite type.
+Compute class weights from real training-fold labels, excluding synthetic records and dev/test labels. For the combined XGBoost variant, retain the original fold's negative/positive ratio after oversampling so the combined treatment is explicit. Oversampling only touches the fitting portion of a fold; evaluation class counts remain unchanged. Persist sampler settings and synthetic counts. Initial sampler/search details are proposed in the task plan and reviewed before full runs.
 
-Extensions on the same first-order window:
+## 8. Bayesian tuning, thresholds, and metrics
 
-- `item_count` — line items on the first order (no products join).
-- `freight_value` — sum of item freight on the first order.
-- `used_voucher` — true if any payment row on the first order has `payment_type = 'voucher'` (split tenders still count).
-- `delivery_days`, `approval_days`, `carrier_days` — `extract(epoch from (end_ts - purchase_ts)) / 86400.0` on the first delivered order. That order must have non-null `order_approved_ts`, `order_delivered_carrier_ts`, and `order_delivered_customer_ts`. Do not impute a mean. Do not emit `delivery_days_missing`, `approval_days_missing`, or `carrier_days_missing`.
-- `after_estimated_delivery` — compare that same order’s `order_delivered_customer_ts::date` to `order_estimated_delivery_ts::date`. On or before estimate → `0`. After estimate → calendar days late. The estimate timestamp must be non-null. Do not impute `0` when a timestamp is missing. Do not emit `after_estimated_delivery_missing`.
-- `review_below_average` — true if any first-order `review_score` is strictly below the extract-wide `avg(review_score)` on `stg_order_reviews`; false if the customer left no review or every score is at or above the average. Never null.
+Use Optuna TPE with seed 42, sequential trials, no initial pruning, 10 total configurations per non-baseline variant including an enqueued default configuration, and five startup trials. Persist studies and enforce the total budget on resume. Every successful configuration completes the same 10 training folds. Trial failures are recorded, not hidden; they consume the attempted-trial budget unless the user approves an extension.
 
-A customer is absent from `customer_features` when the first delivered order lacks `order_approved_ts`, `order_delivered_carrier_ts`, `order_delivered_customer_ts`, or `order_estimated_delivery_ts`. `total_orders` for customers who remain is still the lifetime delivered count. Do not impute durations. Do not add `*_missing` columns. The review-score threshold is extract-wide `avg(review_score)` on `stg_order_reviews` (all staged reviews, not first-order-only). A later train/test split will see that global scalar, not a train-fold-only statistic. Duration columns are non-null because incomplete first orders are excluded. `favorite_payment_type` stays null when the first delivered order has no payment rows.
+Tune toward F2 while recording recall, MCC, standard supporting metrics and fit time. Generate training out-of-fold scores for each configuration, propose its F2-maximizing threshold using those scores, and use the resulting out-of-fold F2 as the exploratory optimization objective. CV used for configuration/threshold selection is development evidence, not an unbiased final estimate. Inspect fold variation and threshold stability instead of claiming an exact universally optimal threshold.
 
-Document the mart in `models/marts/_marts__models.yml` with descriptions, unique/not_null on `customer_unique_id`, and not_null on recency, spend, durations, late-days, `used_voucher`, `review_below_average`, `item_count`, and `freight_value`. Do not add `not_null` on `favorite_payment_type` (the known no-payments order is null). Do not document `*_missing` columns.
+Report candidate results at 0.5 and its proposed threshold; show development threshold curves and let the user approve the frozen thresholds and personally choose the candidate. Recall, F2 (`beta=2`, repeat positive class), and MCC take priority. Also include accuracy, precision, F1, confusion matrix/support, balanced accuracy, specificity, ROC-AUC, average precision, PR/ROC curves, Brier score, log loss, reliability curves and score distributions. Name average precision explicitly; if trapezoidal PR-AUC is also computed, distinguish it.
 
----
+Report undefined metrics explicitly with a documented policy and support counts. Baselines must not crash probability metrics. Uncertain-label rows never enter metric calculations. Raw positive-class probability outputs remain uncalibrated model scores; fitted calibration is deferred.
 
-## 5. Exploratory Data Analysis (EDA) & Feature Discovery
+No numeric model-quality gate or automated winner selection replaces the user's review. Baselines, metrics, variability and feature evidence inform acceptance even if performance is weak.
 
-Cursor must generate an EDA notebook (`notebooks/01_eda_and_profiling.ipynb`) that discovers patterns and validates the repeat-buyer target (including the ~3% class imbalance) before machine learning begins.
+## 9. Human decision gate and final evaluation
 
-### A. Connection & Ingestion
+First produce CV, dev, threshold and feature-analysis evidence. Require a decision record identifying experiment/dataset/configuration fingerprints, the user's selected candidate, frozen configurations and approved thresholds for every candidate, and the user's rationale/approval. Automation must not fabricate human approval.
 
-- **Database path:** Use `SQLAlchemy` and `python-dotenv` to connect to Postgres (local or Heroku).
-- **Local CSV path:** Load from `data/` with Pandas + PyArrow.
-- Query the `customer_features` dbt model into a Pandas DataFrame (PyArrow dtypes). If the model has not been built, fail with a clear "run dbt first" message.
+Partition construction may read labels to stratify and store the isolated test membership/labels. Before a matching decision record, the experiment must not evaluate test predictions, calculate test metrics, use test outcomes for tuning/selection, or publish final predictions. Evaluate the selected candidate first on test and uncertain customers, then frozen alternatives on those same cohorts. Document selection history even if an alternative tests better. No test-based retuning or silent replacement of the selected candidate.
 
-### B. Data Profiling Requirements
+Every saved candidate is fitted on the training partition only; use it unchanged for dev, test, and uncertain scoring. No refit on train+dev or all labeled customers in this experiment. Feature interpretation includes label-based descriptions, logistic coefficients and dev permutation importance, grouped by original feature. Describe associations, not causation. Audit information arrival after the outcome only in deferred work.
 
-- **Completeness:** Calculate the percentage of missing values for all columns.
-- **Cardinality:** Calculate the number of distinct values for categorical features (e.g., `customer_state`).
-- **Distributions:** Generate summary statistics (mean, median, standard deviation) for numeric features (`total_spent`, `total_orders`).
+## 10. Artifacts and prediction persistence
 
-### C. Visualizations (Seaborn / Plotly)
+Each experiment directory stores dataset/code/dependency fingerprints, timestamp conventions, observation end/as-of date, feature allowlist, eligibility census, partition/fold membership, studies, configurations, thresholds, fitted preprocessing/model pipelines, training OOF/dev/test/uncertain predictions, metrics, plots, runtime and decision history. Use JSON/Parquet plus an HTML comparison report. Record execution order and whether results are pre-selection or post-selection. Keep customer outputs, reports, models and SQLite study files out of Git.
 
-Generate the following charts to justify the repeat-buyer target and inspect features (label = `total_orders` > 1):
+PostgreSQL prediction history is keyed by `(experiment_id, candidate_id, customer_unique_id)` for test and uncertain cohorts. Store positive-class score, frozen threshold, predicted label, nullable observed label, cohort, scored-at timestamp and model/configuration fingerprint. Store experiment and selected-candidate metadata separately. Upserts are idempotent within that key and do not overwrite other experiments/candidates. A candidate's publish transaction is atomic; mark overall final-evaluation completion only after all expected candidate outputs exist. Retain previous completed runs on failure.
 
-- **Histogram / count plot:** The distribution of `total_orders` (and the resulting 97/3 one-time vs repeat split) to show why the class is imbalanced.
-- **Boxplot:** Compare `total_spent` between one-time and repeat buyers to see whether high-value customers convert at different rates. Do not treat `average_order_value` as a second spend metric (it equals `total_spent` under the first-order definition).
-- **Bar Chart:** The top 5 states by repeat-buyer rate.
-- **Correlation Matrix:** A heatmap of numeric features **excluding** `total_orders` (the label source) so we do not feed leaked or redundant data into the ML model. Include `days_since_last_purchase` (first-purchase age vs the frozen as-of date, not `current_date`) and `total_spent`. Do not treat `average_order_value` as independent of `total_spent` (they are equal under the first-order definition).
+## 11. Verification and acceptance
 
----
+Use pytest plus dbt against disposable PostgreSQL, Arrow-backed fixtures, hand-calculated feature/target examples, split/resampling isolation tests, saved-model replay, acquisition failure mocks, upload/writeback failure injection, notebook execution and report checks. Full-data validation exports actual counts and discrepancies; never use snapshot row counts as timeless test constants.
 
-## 6. Machine Learning & Python Requirements
-
-Cursor must generate a pipeline in `scripts/train_model.py` with the following specifications. The training frame must be loaded with Pandas **PyArrow**.
-
-### A. Data Preparation & Reframing
-
-- **Target Definition (Repeat Buyer Propensity):** Define a customer as a "Repeat Buyer" (1) if `total_orders` > 1, else (0). This is a highly imbalanced class (~3% positive). Do not use `total_orders` as a model feature; the label is derived from it.
-- **Feature window:** Predictors are first-order only. Never pass `total_orders` or both `total_spent` and `average_order_value` into XGBoost (drop AOV from the matrix; keep it in the table). Do not pass `*_missing` flags. Those columns are not in the mart. Do not impute durations in Python. Do not compute spend, payment type, voucher, items, freight, reviews, or durations from later orders.
-- **Feature Scaling/Encoding:** Standardize numeric features and one-hot encode categorical features (`customer_state`, `favorite_payment_type`).
-- **Resampling:** Implement SMOTE (from `imbalanced-learn`) in the training pipeline to handle the 97/3 class imbalance, ensuring it is only applied to the training set to prevent data leakage.
-- **Split:** Train/test split (80/20) **before** SMOTE so the test set stays the real class distribution.
-
-### B. Model Training & Imbalance Handling
-
-- Train an `XGBoostClassifier`.
-- Pass the `scale_pos_weight` hyperparameter to account for the class imbalance.
-- Extract **Repeat Purchase Probability** using `.predict_proba()`.
-
-### C. Advanced Evaluation Metrics
-
-- Do **not** use Accuracy as the primary metric.
-- Evaluate the model on the test set using **PR-AUC (Precision-Recall AUC)**, **F1-Score**, and a **Confusion Matrix**.
-
-### D. Prediction Writeback
-
-After scoring, **INSERT/UPDATE** (upsert on `customer_unique_id`) into a Postgres table such as `customer_repeat_predictions`, including at least: repeat-buyer flag, repeat purchase probability, and a scored-at timestamp. This table is what Power BI/Tableau reads. A plain append that can duplicate customers is not acceptable.
-
-Local runs use `.env`. CI uses GitHub Secrets mapped to the same `POSTGRES_*` variables.
-
----
-
-## 7. Unit & Validation Tests (Python)
-
-Cursor must generate a test suite in `tests/test_pipeline.py` using `pytest` to validate the ML logic and data integrity. Pandas fixtures and reads must use PyArrow. Do not replace these with the reference project's DuckDB mart-invariant tests.
-
-### A. Data Validation Tests
-
-- `test_no_duplicate_customers()`: Ensure the final Pandas dataframe has strictly unique `customer_unique_id`s before training.
-- `test_no_missing_features()`: Assert that critical columns (`total_spent`, `days_since_last_purchase`) have 0 null values.
-
-### B. Machine Learning Unit Tests
-
-- `test_repeat_buyer_logic()`: Pass a dummy row with `total_orders = 2` and assert the label evaluates to `1`; pass `total_orders = 1` and assert `0`.
-- `test_smote_train_only()`: Assert SMOTE is applied only to the training split (test-set class counts are unchanged).
-- Do **not** gate the model on Accuracy or ROC-AUC. Assert that PR-AUC, F1-Score, and a confusion matrix are computed on the test set.
-
-### C. Writeback Integrity
-
-- Assert that upserts into the predictions table do not create duplicate `customer_unique_id` rows.
-
----
-
-## 8. CI/CD (GitHub Actions)
-
-Cursor must generate a CI/CD pipeline using GitHub Actions to automate model training in the cloud.
-
-- **Workflow file:** `.github/workflows/train_model.yml`.
-- **Triggers:** Push to the `main` branch, and a weekly cron schedule.
-- **Runner:** `ubuntu-latest`; check out the code; install dependencies from `requirements.txt`.
-- **Secrets:** Pass Heroku Postgres credentials via GitHub Secrets, injected as `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`. Never commit or print them.
-- **Execution:** Run `scripts/train_model.py`. The script must train the model and successfully INSERT/UPDATE predictions in Heroku PostgreSQL so Power BI can ingest the latest repeat-purchase scores.
-
-**Scope of this workflow:** CI assumes data and the dbt `customer_features` table already exist in Heroku. This job trains and rescores; it does not download Kaggle data or run the local CSV path. Weekly cron is for rescoring, not for local development.
-
-**Local vs CI:** Developers download CSVs first, then either stay on disk or upload to Postgres. Actions always uses the Heroku path.
-
----
-
-## 9. Execution Instructions for Cursor
-
-When reading this document, Cursor should check the current directory structure. **Fill spec gaps only when the corresponding artifact is missing** (scripts, workflow, tests, notebook, typed staging). That rule applies to **new artifacts**, not to revising feature definitions.
-
-Whenever mart grain, feature window, target, or required columns change, agents **must** update this spec and `.cursor/rules/project.mdc` in the same change so they do not contradict the SQL. Do not revert first-order definitions back to lifetime spend or `current_date` recency.
-
-- If staging is `SELECT *` or untyped, replace it with reference-style typed staging (do not invent KPI marts).
-- If YAML or singular dbt tests are missing, generate `_staging__models.yml`, `_marts__models.yml`, and the singular tests.
-- If download / local-vs-upload entrypoints are missing, generate them.
-- If the EDA notebook or profiling script is missing, generate them (PyArrow I/O).
-- If `scripts/train_model.py` is missing or cannot upsert predictions, generate or fix it.
-- If `tests/test_pipeline.py` is missing, generate it.
-- If `.github/workflows/train_model.yml` is missing, generate it.
-- If Pandas I/O is not using PyArrow, switch it.
-
-Do not copy `docs/ref/` Streamlit, DuckDB, Docker, or star-schema KPI marts. Treat `docs/ref/` as a read-only pattern source for dbt staging and tests.
+Every task includes planned cases and expected outputs before coding, then actual commands, results, artifacts, warnings and limitations for the user's review before acceptance. No subagent begins dependent work until its prerequisites are accepted. See the task plan and acceptance matrix for complete coverage.

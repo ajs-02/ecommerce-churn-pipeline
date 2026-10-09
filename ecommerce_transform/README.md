@@ -1,8 +1,8 @@
 # ecommerce_transform
 
-dbt project on PostgreSQL for the Olist repeat-buyer pipeline. Typed staging models clean the nine-table extract; `customer_features` is the customer-grain mart used for training and the Power BI score table.
+dbt project on PostgreSQL for the Olist repeat-order exploration. Staging models clean the nine-table extract; `customer_features` is the customer-grain ML mart. Current SQL has not yet been migrated to the agreed target, seconds-based features, and eligibility policy in [the specification](../docs/project_spec.md).
 
-Staging is views; the mart is a table. Recency uses `var('as_of_date')` when set, otherwise the latest purchase date in the extract.
+Staging is views; the mart is a table. Frozen recency uses `var('as_of_date')` when set, otherwise the latest purchase date in the extract. The planned prediction history is separate from the feature mart. Power BI remains unedited and its refresh may break after the planned schema changes.
 
 ```
 dbt run

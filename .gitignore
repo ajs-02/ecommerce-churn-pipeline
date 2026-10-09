@@ -81,6 +81,22 @@ desktop.ini
 docs/*
 !docs/project_spec.md
 !docs/implementation_gap.md
+!docs/agents/
+docs/agents/*
+!docs/agents/issue-tracker.md
+!docs/agents/triage-labels.md
+!docs/agents/domain.md
+!docs/implementation_plan.md
+!docs/test_acceptance_matrix.md
+!docs/adr/
+!docs/adr/*.md
+!docs/issues/
+!docs/issues/*.md
+
+# Generated exploration artifacts contain customer-level data and model binaries
+reports/
+artifacts/
+*.sqlite3
 
 # Logs
 *.log

@@ -1,0 +1,3 @@
+# Include early positives in a historical repeat-order experiment
+
+Accepted 8 October 2026. Anchor the 180-day all-status repeat target at the first delivered order's purchase timestamp and include observed early positives alongside complete-follow-up labeled customers. This preserves observed repeat activity in an imbalanced exploratory dataset, at the cost of selection bias toward fast observed repeats in recent cohorts. Unfinished cases without repeats remain uncertain. Preserve current post-purchase feature definitions; prospective information-arrival analysis is deferred, so results are historical exploratory evidence rather than proven prospective performance.

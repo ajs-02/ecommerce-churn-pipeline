@@ -1,61 +1,43 @@
-# Olist Repeat Buyer Propensity Pipeline
+# Olist repeat-order exploration
 
-End-to-end data science project for an entry-level analytics and modeling portfolio. The goal is to score one-time buyers on the Brazilian Olist marketplace by how likely they are to purchase again, so marketing can focus retention spend on high-propensity customers.
+Explore first-delivered-order features associated with another order of any status within 180 days. Compare classifiers using recall, F2 and MCC as priorities, report the standard metrics, and let the project owner personally choose a candidate before final test evaluation.
 
-The work is a full pipeline, not a single notebook: raw extract, warehouse, tested transformations, a leakage-aware feature mart, a prediction layer, a Power BI dashboard, and CI/CD.
+The agreed design is in [the specification](docs/project_spec.md). [Implementation gaps](docs/implementation_gap.md), [the task plan](docs/implementation_plan.md), and [test acceptance cases](docs/test_acceptance_matrix.md) distinguish what exists from what remains to build. The design was confirmed on 8 October 2026; pipeline implementation has not yet been updated to match it.
 
-## Scale
+## Current status
 
-The Kaggle Olist extract is production-shaped, not a toy table.
+The repository contains PostgreSQL/dbt staging and a customer feature mart, upload/validation/connection scripts, initial uploader/connection tests, a CLI verification harness, and an existing Power BI report. Current dev already excludes incomplete anchor timestamps, avoids duration imputation, and applies the missing-payment-row spend fallback. The downloader, profiling/EDA, experiment code, comprehensive acceptance tests, human selection gate and prediction-history writeback remain planned. SQL still uses day units and does not implement the new target.
 
-- About 100,000 orders and 96,000 unique customers across nine related tables (customers, orders, items, payments, reviews, products, sellers, geolocation, category translation)
-- Repeat buyers are roughly 3% of customers, so accuracy is the wrong headline metric
-- Split tenders and a small number of source-quality issues are handled in SQL. Customers whose first delivered order lacks an approval, carrier, delivery, or estimate timestamp are omitted from the mart.
+## Agreed experiment
 
-## Design
+- Anchor at the first delivered order's purchase timestamp; count any distinct other order placed within the inclusive 180-day window.
+- Include early observed positives; unfinished customers without a repeat have uncertain labels and are scored separately.
+- Preserve first-delivered-order features, recover values only from that order's existing records, exclude unrecoverable inputs/negative elapsed durations, and report other chronology warnings.
+- Express duration features in seconds, preserve calendar-based lateness/recency, add review presence, and remove average order value.
+- Use stratified random 60/20/20 train/dev/test partitions, seed 42, with stratified ten-fold CV inside training only.
+- Compare baselines, logistic regression, random forest and XGBoost variants. Use bounded Bayesian tuning and training out-of-fold threshold proposals.
+- The owner reviews dev evidence, approves frozen thresholds and chooses the model. Evaluate that candidate first, then frozen alternatives, without test-based retuning or refitting.
 
-A few choices keep the score honest for one-time buyers:
+This is historical exploratory classification. Post-purchase features, early-positive selection and uncalibrated scores limit prospective/probability claims. See the spec for exact definitions and evidence requirements.
 
-- **First-order window.** Predictors come from the first delivered order only. Lifetime order count is the label source and is never a model input.
-- **Frozen recency.** Days since purchase are measured against a fixed as-of date, not `current_date` or the last order.
-- **No label reconstruction.** Spend, payment type, voucher use, items, freight, reviews, and delivery times are not computed from later orders. Average order value is kept for the dashboard; it is not passed into the model alongside spend.
-- **Warehouse-owned features.** Typed dbt staging and one customer-grain mart live in Postgres. The mart omits customers whose first delivered order is missing a lifecycle timestamp. Python trains and writes scores. It does not redefine the feature window or fill those timestamps.
-- **Imbalance.** Training uses SMOTE on the train split only, plus XGBoost `scale_pos_weight`. Evaluation is PR-AUC, F1, and a confusion matrix.
+## Data and tools
 
-Local development uses CSVs and/or local Postgres. The same models run against Heroku Postgres for the live dashboard.
+Both local and Heroku execution use PostgreSQL. CSVs are acquisition inputs; dbt owns the feature/target definitions. Pandas uses Arrow-backed data; planned experiments use scikit-learn, XGBoost, imbalanced-learn and Optuna. Customer outputs, reports and model artifacts remain outside Git.
 
-## Dashboard
-
-Power BI reads the scored `customer_features` table from Postgres: repeat-purchase probability plus first-order spend, delivery, review, and geography fields. The report has an executive retention summary and a logistics deep dive (delivery speed, vouchers, late deliveries vs. negative reviews by state and spend tier).
-
-![Olist Customer Churn Analysis dashboard](Power%20BI/Dashboard%20Recording.gif)
-
-## Stack
-
-| Layer | Tools |
-| --- | --- |
-| Ingest and analysis | Python, Pandas, PyArrow, SQLAlchemy |
-| Warehouse | PostgreSQL (local and Heroku) |
-| Transform | dbt (`ecommerce_transform/`) |
-| Model | scikit-learn, XGBoost, imbalanced-learn |
-| Dashboard | Power BI on the scored Postgres table |
-| Quality | dbt tests, pytest |
-| Automation | GitHub Actions (train and rescore on push to `main` and a weekly schedule) |
-
-The prediction layer trains on `customer_features`, upserts repeat-purchase probabilities into Postgres, and is what Power BI reads. CI/CD retrains against the cloud database using repository secrets; it does not replace local development.
-
-## Layout
-
-```
-data/                    # Olist CSVs (not committed)
-scripts/                 # upload, validation, connection check
-ecommerce_transform/     # dbt staging + customer_features mart
-```
-
-## Local setup
+## Existing local commands
 
 1. Create a virtual environment and install `requirements.txt`.
-2. Copy `.env.example` to `.env` and point it at local or Heroku Postgres.
-3. Place the Olist CSVs in `data/`.
-4. Load them with `python scripts/upload_data.py`, then confirm row counts with `python scripts/validate_upload.py`.
-5. From `ecommerce_transform/`, run `dbt run` and `dbt test` (set `DBT_PROFILES_DIR` as in `.env.example`).
+2. Copy `.env.example` to `.env` and configure the chosen PostgreSQL target.
+3. Place the nine Olist CSVs in `data/`.
+4. Existing commands are `python scripts/upload_data.py`, `python scripts/validate_upload.py`, and `python scripts/test_connection.py`.
+5. From `ecommerce_transform/`, run `dbt run`, `dbt test`, and `dbt docs generate`, using the configured profile/environment.
+
+Dev has transactional uploads and failing exit codes, but uploads still drop tables with CASCADE and do not validate the complete dataset manifest. Do not treat these commands as proof of the planned dependency-preserving refresh or new feature contract. Each task will update this runbook to the commands actually verified during implementation.
+
+## Existing dashboard and deferred work
+
+Power BI remains unedited. AOV removal and feature renaming may break its refresh; the owner accepts that consequence and will repair the report later. There is no implemented probability binding or current scheduled-training requirement.
+
+![Existing Olist dashboard recording](Power%20BI/Dashboard%20Recording.gif)
+
+Automated cloud training, push/weekly jobs, deployment, synthetic future-customer data, information-arrival audit, fitted calibration and additional classifiers are deferred. Every coding task requires review of its outputs, test cases and outcomes before acceptance.
