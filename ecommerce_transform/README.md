@@ -11,3 +11,5 @@ dbt docs generate
 ```
 
 Profiles read `POSTGRES_*` from the environment. See the repo root README for setup and design notes.
+
+T03 staging is verified through real dbt on disposable PostgreSQL. See [ERD cardinalities](../docs/erd.md). To check staging independently before building the mart, use `dbt run --select path:models/staging` then `dbt test --select path:models/staging tag:staging --indirect-selection cautious`. Full `dbt test` includes mart assertions and requires the mart to exist.

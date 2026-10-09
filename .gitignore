@@ -100,3 +100,5 @@ artifacts/
 
 # Logs
 *.log
+!docs/erd.md
+!docs/execution_log.md

@@ -5,9 +5,9 @@ with source as (
 )
 
 select
-    order_id,
-    customer_id,
-    order_status,
+    cast(order_id as text) as order_id,
+    cast(customer_id as text) as customer_id,
+    cast(order_status as text) as order_status,
     cast(order_purchase_timestamp as timestamp) as order_purchase_ts,
     cast(order_approved_at as timestamp) as order_approved_ts,
     cast(order_delivered_carrier_date as timestamp) as order_delivered_carrier_ts,

@@ -8,6 +8,8 @@ The agreed design is in [the specification](docs/project_spec.md). [Implementati
 
 The repository contains PostgreSQL/dbt staging and a customer feature mart, upload/validation/connection scripts, reproducible Olist acquisition and manifest validation, a CLI verification harness, and an existing Power BI report. Current dev already excludes incomplete anchor timestamps, avoids duration imputation, and applies the missing-payment-row spend fallback. Profiling/EDA, experiment code, human selection gate and prediction-history writeback remain planned. SQL still uses day units and does not implement the new target.
 
+T03 completes required typed staging, summed payment-type shares with alphabetical ties, null-propagating totals, raw negative/non-finite monetary checks, and executable staging integrity checks. See [staging keys and cardinalities](docs/erd.md) and [execution decisions](docs/execution_log.md). Staging dbt run/test/docs are verified on disposable PostgreSQL; the feature mart still awaits T04.
+
 ## Agreed experiment
 
 - Anchor at the first delivered order's purchase timestamp; count any distinct other order placed within the inclusive 180-day window.
@@ -35,7 +37,7 @@ Both local and Heroku execution use PostgreSQL. CSVs are acquisition inputs; dbt
 
 T02 implements transactional staging of all nine required files before publication. Upload and row-count validation check schema, source types and an existing dataset manifest. Successful refreshes preserve raw-table identities and dependent views. A failed file, batch or publication rolls back the complete dataset. CSV and SQL loaders return bounded Arrow-backed frames. New raw numeric columns support existing SUM/AVG operations, while identifiers and ZIP codes preserve source text. Existing compatible target column types are retained. Upload, validation and connection failures return nonzero exits without exposing connection URLs or passwords.
 
-T02 fixture evidence is ready for human review, not accepted. Verified entry points accept an optional dataset directory: `python scripts/upload_data.py <data-dir>` and `python scripts/validate_upload.py <data-dir>`. Upload refreshes the configured target, so select that target deliberately. Connection checking uses `python scripts/test_connection.py`. No live database refresh or dbt build was performed for T02.
+T02 was accepted by the user and merged through PR11 and PR12 on 9 October 2026. Verified entry points accept an optional dataset directory: `python scripts/upload_data.py <data-dir>` and `python scripts/validate_upload.py <data-dir>`. Upload refreshes the configured target, so select that target deliberately. Connection checking uses `python scripts/test_connection.py`. No live database refresh or dbt build was performed for T02.
 
 The real PostgreSQL acceptance tests require a disposable local cluster with user `t02`, database `postgres`, trust authentication and a dedicated port. Set `T02_POSTGRES_PORT` to that cluster port, then run `python -m pytest -q`. These tests reset its public schema. Leave the variable unset to skip database tests. The verified cluster used PostgreSQL 18.6 at `127.0.0.1:55432`. Record count/content/OID evidence by also setting `T02_EVIDENCE_DIR` to an existing artifact directory. Python syntax checks use `python -m compileall -q scripts tests`. No dedicated typechecker is configured.
 

@@ -4,7 +4,11 @@ Updated 8 October 2026 after the design interview and reconciled with dev at `6c
 
 ## T02 implementation update, 9 October 2026
 
-T01 acquisition/manifest is present. T02 adds required-file/schema/manifest checks, temporary staging, atomic dependency-preserving publication, bounded Arrow CSV/SQL loaders and shared truthful connection/validation scripts. Real disposable PostgreSQL tests cover existing views, table identities, reruns, later-batch and publication failures, nullable numeric fields and current SUM/AVG compatibility. Evidence remains subject to the owner's review; T02 is not yet accepted. Profiling, modeling, typed staging completion and later tasks remain unchanged. The inventory below is the historical pre-implementation snapshot.
+T01 acquisition/manifest is present. T02 adds required-file/schema/manifest checks, temporary staging, atomic dependency-preserving publication, bounded Arrow CSV/SQL loaders and shared truthful connection/validation scripts. Real disposable PostgreSQL tests cover existing views, table identities, reruns, later-batch and publication failures, nullable numeric fields and current SUM/AVG compatibility. The user accepted and authorized T02 publication on 9 October 2026; PR11 and reader-lifetime follow-up PR12 are merged. Profiling, modeling, typed staging completion and later tasks remain unchanged. The inventory below is the historical pre-implementation snapshot.
+
+## T03 implementation update, 9 October 2026
+
+Required staging now uses explicit projections and casts. Payments rank summed per-type values with alphabetical ties; nullable amounts preserve unknown totals. dbt monetary, key, relationship, status and boolean checks are tested on disposable PostgreSQL. ERD and generated docs evidence are available. The user delegated T03-T05 task acceptance to agent judgment; the final model-selection gate remains personal.
 
 ## Current implementation
 
