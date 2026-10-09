@@ -19,3 +19,5 @@ Money nulls remain staged as unknown for T04 eligibility. Staging not-null money
 Item monetary casts use unbounded numeric after fixture123456789.123 and freight0.001 demonstrated overflow/rounding under the previous numeric10,2. Explicit staging tests use cautious indirect selection so unrelated unbuilt mart assertions cannot create false failures.
 
 Detailed fixture inputs, commands, outcomes, dependencies and dbt docs artifacts are preserved outside the managed worktree under C:/Users/prince/.codex/visualizations/2026/10/09/01a11faf-27a8-7441-a7ba-1c98add13e78/pipeline-evidence/t03. Review packet records actual final results.
+
+T03 review identified two additional boundary cases. Legacy text lowercase nan/infinity is normalized through a numeric cast before the dbt non-finite check. A null voucher amount competing with card50 keeps total and favorite unknown while voucher remains true. Both regressions were reproduced first, then fixed through the same dbt/SELECT seams.

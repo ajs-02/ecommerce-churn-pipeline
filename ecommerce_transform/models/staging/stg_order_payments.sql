@@ -37,6 +37,7 @@ select
     a.max_installments,
     a.payment_row_count,
     a.used_voucher,
-    r.payment_type as favorite_payment_type
+    case when a.total_payment_value is not null then r.payment_type end as favorite_payment_type
 from aggregated a
 join ranked r on a.order_id = r.order_id and r.rn = 1
+

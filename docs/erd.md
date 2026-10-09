@@ -20,7 +20,7 @@ erDiagram
 | stg_order_payments | order_id | Zero or one staged summary per order; raw order_payments has many split rows. |
 | stg_order_reviews | review_id | order_id references stg_orders; multiple distinct reviews per order remain. |
 
-Payment totals become unknown if any amount is null. Favorite type uses summed value per type with alphabetical ties under C collation. Missing type stays unknown. Voucher presence is a non-null PostgreSQL boolean. Negative or non-finite amounts fail dbt validation even if positive split payments would hide them in the aggregate. Zero monetary values pass.
+Payment totals become unknown if any amount is null. Favorite type uses summed value per type with alphabetical ties under C collation. Missing type stays unknown. When any competing amount is null, favorite also remains unknown because ranking cannot be established. Voucher presence is a non-null PostgreSQL boolean. Negative or non-finite amounts fail dbt validation even if positive split payments would hide them in the aggregate. Zero monetary values pass.
 
 Reviews retain the earliest creation timestamp then smallest order ID for repeated review IDs. Null creation timestamps sort last under PostgreSQL ordering. Exact duplicates with identical ordering keys have the same declared review identity; the source's remaining comments are not predictors.
 

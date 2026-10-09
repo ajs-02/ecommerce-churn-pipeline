@@ -320,3 +320,35 @@ def test_valid_large_fractional_item_amounts_are_preserved(staging):
         assert conn.execute(
             text("SELECT item_price,freight_value FROM stg_order_items")
         ).one() == (Decimal("123456789.123"), Decimal("0.001"))
+
+
+@pytest.mark.parametrize("value", ["nan", "infinity", "-infinity"])
+def test_legacy_text_nonfinite_payment_fails_raw_validation(staging, value):
+    with staging.begin() as conn:
+        conn.execute(
+            text("ALTER TABLE order_payments ALTER COLUMN payment_value TYPE text")
+        )
+        conn.execute(
+            text("UPDATE order_payments SET payment_value=:value"), {"value": value}
+        )
+    build()
+    result = dbt("test", "--select", "assert_nonnegative_raw_payments")
+    assert result.returncode != 0, result.stdout + result.stderr
+
+
+def test_unknown_competing_type_sum_keeps_favorite_unknown(staging):
+    with staging.begin() as conn:
+        conn.execute(text("DELETE FROM order_payments"))
+        conn.execute(
+            text(
+                "INSERT INTO order_payments VALUES (:order,1,'voucher',1,NULL),(:order,2,'credit_card',1,50)"
+            ),
+            {"order": "c" * 32},
+        )
+    build()
+    with staging.connect() as conn:
+        assert conn.execute(
+            text(
+                "SELECT total_payment_value,favorite_payment_type,used_voucher FROM stg_order_payments"
+            )
+        ).one() == (None, None, True)
