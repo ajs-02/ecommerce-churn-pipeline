@@ -1,8 +1,8 @@
 # Complete the agreed Olist exploratory implementation
 
-The user confirmed the design interview on 8 October 2026. This map tracks the remaining implementation, not authorization to begin coding. Draft contracts are prepared in the worktree and are not yet committed/published as repository files.
+The user confirmed the design interview on 8 October 2026. This map tracks the remaining implementation, not authorization to begin coding. The agreed contracts are published on the dev branch. Implementation still awaits the user's task-plan review.
 
-Read `docs/project_spec.md`, `docs/implementation_plan.md`, `docs/test_acceptance_matrix.md` and `docs/implementation_gap.md` before implementation. Use the task plan as the source of detailed handoff steps and proposed search spaces.
+Read [the spec](https://github.com/ajs-02/ecommerce-churn-pipeline/blob/dev/docs/project_spec.md), [the implementation plan](https://github.com/ajs-02/ecommerce-churn-pipeline/blob/dev/docs/implementation_plan.md), [the acceptance matrix](https://github.com/ajs-02/ecommerce-churn-pipeline/blob/dev/docs/test_acceptance_matrix.md) and `docs/implementation_gap.md` before implementation. Use the task plan as the source of detailed handoff steps and proposed search spaces.
 
 All children start unassigned with `needs-triage` pending the user's plan review. Subagents deliver outputs, test cases and outcomes; only the user accepts a task. Accepted prerequisites are required before dependent work. Model/threshold selection is a separate human gate before test evaluation.
 

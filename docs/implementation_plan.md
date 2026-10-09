@@ -4,7 +4,7 @@ Draft for the user's review, 8 October 2026. The design interview is confirmed; 
 
 ## Execution and review
 
-Track implementation work in the repository's GitHub map and child issues when publication is approved. The exact local issue bodies are linked below. Intended initial status is `needs-triage`, unassigned, pending plan review. Do not self-start implementation because the design was confirmed.
+Track implementation work in the repository's GitHub map and child issues. The user authorized publication to dev and GitHub Issues. Exact issue bodies are linked below. Initial status is `needs-triage`, unassigned, pending plan review. Do not self-start implementation because the design/publication was confirmed.
 
 After the user approves execution, a coordinator gives each coding subagent one bounded task and its accepted prerequisites. Independent work may run in parallel only when it does not share files or depend on unaccepted outputs. Agents provide their test cases, expected outputs, actual outcomes and artifacts for human review. Mark a task accepted/close its issue only after explicit user acceptance. Model and threshold selection is a separate human gate; acceptance of the training code does not select a candidate.
 
@@ -101,7 +101,7 @@ Power BI repair; information-arrival audit; fitted calibration; kNN/SVM/Naive Ba
 
 ## GitHub issue map
 
-No GitHub issues or labels were created. Publication was blocked by automatic approval review; explicit authorization to publish these bodies is pending. Local handoffs are complete and reviewable:
+The user explicitly authorized publication after the initial approval-review block. The reviewed handoff bodies are:
 
 | Record | Local body |
 | --- | --- |
@@ -115,4 +115,4 @@ No GitHub issues or labels were created. Publication was blocked by automatic ap
 | T07 | [Decision gate and prediction history](issues/t07.md) |
 | T08 | [Full verification](issues/t08.md) |
 
-After approval, create the map and eight children in `ajs-02/ecommerce-churn-pipeline`, with `needs-triage` and `wayfinder:map`/`wayfinder:task` labels, leaving all unassigned. Add map links and native sub-issues/dependencies where supported; otherwise add `Part of #<map>` and `Blocked by: #<number>`. Re-read the published records to verify exact content, label state and blockers. Replace this pending section with actual issue links.
+Publish the map and eight children in `ajs-02/ecommerce-churn-pipeline`, with `needs-triage` and `wayfinder:map`/`wayfinder:task` labels, leaving all unassigned. Use map links and native sub-issues/dependencies where supported; otherwise use `Part of #<map>` and `Blocked by: #<number>`. Verify published content, labels and blockers. Actual issue links are recorded here after publication.
