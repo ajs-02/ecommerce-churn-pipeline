@@ -379,3 +379,28 @@ def test_empty_raw_table_fails_truthfully_instead_of_publishing_fake_profile(
     assert result.returncode != 0
     assert "empty table order_reviews" in result.stdout
     assert not (tmp_path / "reports/data_profile_report.html").exists()
+
+
+def test_successful_profile_rerun_preserves_artifacts_owned_by_other_commands(
+    profile_database, tmp_path
+):
+    build_mart()
+    output = tmp_path / "reports"
+    first = profile_cli(output)
+    assert first.returncode == 0, first.stdout + first.stderr
+    unrelated = {
+        "feature_diagnostics/census.json": b'{"eligible": 1}',
+        "eda/eda_summary.json": b'{"uncertain": 1}',
+        "01_eda_executed.ipynb": b'{"cells": []}',
+        "notes.txt": b"Keep reviewed notes",
+        "plots/manual_plot.txt": b"Other chart evidence",
+        "profiles/manual.html": b"Other profile evidence",
+    }
+    for relative, content in unrelated.items():
+        path = output / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    second = profile_cli(output)
+    assert second.returncode == 0, second.stdout + second.stderr
+    for relative, content in unrelated.items():
+        assert (output / relative).read_bytes() == content

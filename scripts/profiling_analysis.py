@@ -95,13 +95,16 @@ def generate_profiles(output_dir):
             prefix=".profile-staging-", dir=requested.parent
         ) as temporary:
             output = Path(temporary) / "reports"
+            if requested.exists():
+                # Reports is shared with diagnostics, notebook exports and reviewed notes.
+                shutil.copytree(requested, output)
             with engine.connect().execution_options(
                 isolation_level="REPEATABLE READ"
             ) as connection:
                 with connection.begin():
                     census = load_feature_census(connection)
-                    output.mkdir()
-                    (output / "profiles").mkdir()
+                    output.mkdir(exist_ok=True)
+                    (output / "profiles").mkdir(exist_ok=True)
                     summary = {"source": "PostgreSQL", "census": census, "tables": {}}
                     for table in (*RAW_TABLES, "customer_features"):
                         frame = load_relation(connection, table)
