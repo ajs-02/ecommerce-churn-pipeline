@@ -2,7 +2,7 @@
 
 Explore first-delivered-order features associated with another order of any status within 180 days. Compare classifiers using recall, F2 and MCC as priorities, report the standard metrics, and let the project owner personally choose a candidate before final test evaluation.
 
-The agreed design is in [the specification](docs/project_spec.md). [Implementation gaps](docs/implementation_gap.md), [the task plan](docs/implementation_plan.md), and [test acceptance cases](docs/test_acceptance_matrix.md) distinguish what exists from what remains to build. The design was confirmed on 8 October 2026; pipeline implementation has not yet been updated to match it.
+The agreed design is in [the specification](docs/project_spec.md). [Implementation gaps](docs/implementation_gap.md), [the task plan](docs/implementation_plan.md), and [test acceptance cases](docs/test_acceptance_matrix.md) distinguish what exists from what remains to build. The design was confirmed on 8 October 2026, and pipeline implementation is in progress.
 
 ## Current status
 
@@ -33,7 +33,7 @@ Both local and Heroku execution use PostgreSQL. CSVs are acquisition inputs; dbt
 5. Existing database commands are `python scripts/upload_data.py`, `python scripts/validate_upload.py`, and `python scripts/test_connection.py`.
 6. From `ecommerce_transform/`, run `dbt run`, `dbt test`, and `dbt docs generate`, using the configured profile/environment.
 
-Dev has transactional uploads and failing exit codes, but uploads still drop tables with CASCADE and do not validate the complete dataset manifest. Do not treat these commands as proof of the planned dependency-preserving refresh or new feature contract. Each task will update this runbook to the commands actually verified during implementation.
+Dev has transactional uploads and failing exit codes, but uploads still drop tables with CASCADE and do not consume or validate the dataset manifest. Do not treat these commands as proof of the planned dependency-preserving refresh or new feature contract. Each task will update this runbook to the commands actually verified during implementation.
 
 Download publication stages and validates the complete candidate before swapping the data directory. A failed rename restores the prior directory; if the operating system also prevents restoration, the error reports the retained `.olist-previous-*` backup. Concurrent readers can briefly find the destination missing during a directory rename. The manifest fingerprints archive bytes when downloaded, but it cannot detect upstream changes that remove complete CSV records unless the upstream source publishes a trusted expected size or checksum.
 
