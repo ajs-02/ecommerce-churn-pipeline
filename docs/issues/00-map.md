@@ -10,4 +10,19 @@ Task order: T01 acquisition -> T02 atomic upload -> T03 staging -> T04 features/
 
 No Power BI edits, weekly/push training, deployment, synthetic future data, fitted calibration or information-arrival audit in this scope. Optional later classifiers require runtime/results review.
 
-Child issue links and blockers will be added after creation.
+## Published tasks
+
+All eight tasks are native sub-issues of this map, with native blocker dependencies in the listed order. Textual references in each child also preserve the relationship.
+
+| Task | Issue | Blocked by |
+| --- | --- | --- |
+| T01 | [#2](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/2) | User plan approval |
+| T02 | [#3](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/3) | #2 |
+| T03 | [#4](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/4) | #3 |
+| T04 | [#5](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/5) | #4 |
+| T05 | [#6](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/6) | #5 |
+| T06 | [#7](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/7) | #6 |
+| T07 | [#8](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/8) | #7 |
+| T08 | [#9](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/9) | #8 |
+
+Acceptance requires the user's review; an open blocker also prevents dependent implementation. No task is assigned or accepted by publication.

@@ -115,4 +115,17 @@ The user explicitly authorized publication after the initial approval-review blo
 | T07 | [Decision gate and prediction history](issues/t07.md) |
 | T08 | [Full verification](issues/t08.md) |
 
-Publish the map and eight children in `ajs-02/ecommerce-churn-pipeline`, with `needs-triage` and `wayfinder:map`/`wayfinder:task` labels, leaving all unassigned. Use map links and native sub-issues/dependencies where supported; otherwise use `Part of #<map>` and `Blocked by: #<number>`. Verify published content, labels and blockers. Actual issue links are recorded here after publication.
+Published map: [#1](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/1). All tasks are open, unassigned and labelled `needs-triage` plus `wayfinder:task`. The map uses `wayfinder:map`. Native sub-issue links and blockers match the sequence below; textual references are also present in the child bodies.
+
+| Task | Issue | Blocked by |
+| --- | --- | --- |
+| T01 | [#2](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/2) | User plan approval |
+| T02 | [#3](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/3) | #2 |
+| T03 | [#4](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/4) | #3 |
+| T04 | [#5](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/5) | #4 |
+| T05 | [#6](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/6) | #5 |
+| T06 | [#7](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/7) | #6 |
+| T07 | [#8](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/8) | #7 |
+| T08 | [#9](https://github.com/ajs-02/ecommerce-churn-pipeline/issues/9) | #8 |
+
+Created labels: `wayfinder:map`, `wayfinder:task`, `wayfinder:research`, `wayfinder:prototype`, and `wayfinder:grilling`. No coding task was started, assigned or accepted by publication.
