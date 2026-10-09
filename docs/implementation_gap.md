@@ -8,7 +8,7 @@ T01 acquisition/manifest is present. T02 adds required-file/schema/manifest chec
 
 ## T03 implementation update, 9 October 2026
 
-Required staging now uses explicit projections and casts. Payments rank summed per-type values with alphabetical ties; nullable amounts preserve unknown totals. dbt monetary, key, relationship, status and boolean checks are tested on disposable PostgreSQL. ERD and generated docs evidence are available. The user delegated T03-T05 task acceptance to agent judgment; the final model-selection gate remains personal.
+Required staging now uses explicit projections and casts. Payments rank summed per-type values with alphabetical ties; nullable amounts preserve unknown totals. dbt monetary, key, relationship, status and boolean checks are tested on disposable PostgreSQL. ERD and generated docs evidence are available. Final combined suite passed98 tests with0 skips and1 intentional fixture warning; coordinator Standards and Spec reviews have no unresolved findings. The user delegated T03-T05 task acceptance to agent judgment; the final model-selection gate remains personal.
 
 ## Current implementation
 

@@ -8,7 +8,7 @@ The agreed design is in [the specification](docs/project_spec.md). [Implementati
 
 The repository contains PostgreSQL/dbt staging and a customer feature mart, upload/validation/connection scripts, reproducible Olist acquisition and manifest validation, a CLI verification harness, and an existing Power BI report. Current dev already excludes incomplete anchor timestamps, avoids duration imputation, and applies the missing-payment-row spend fallback. Profiling/EDA, experiment code, human selection gate and prediction-history writeback remain planned. SQL still uses day units and does not implement the new target.
 
-T03 completes required typed staging, summed payment-type shares with alphabetical ties, null-propagating totals, raw negative/non-finite monetary checks, and executable staging integrity checks. See [staging keys and cardinalities](docs/erd.md) and [execution decisions](docs/execution_log.md). Staging dbt run/test/docs are verified on disposable PostgreSQL; the feature mart still awaits T04.
+T03 completes required typed staging, summed payment-type shares with alphabetical ties, null-propagating totals, raw negative/non-finite monetary checks, and executable staging integrity checks. See [staging keys and cardinalities](docs/erd.md) and [execution decisions](docs/execution_log.md). T03 validation passed98 tests with0 skips and1 intentional fixture warning; staging dbt run/test/docs are verified on disposable PostgreSQL; the feature mart still awaits T04.
 
 ## Agreed experiment
 
