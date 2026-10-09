@@ -10,6 +10,18 @@ T01 acquisition/manifest is present. T02 adds required-file/schema/manifest chec
 
 Required staging now uses explicit projections and casts. Payments rank summed per-type values with alphabetical ties; nullable amounts preserve unknown totals. dbt monetary, key, relationship, status and boolean checks are tested on disposable PostgreSQL. ERD and generated docs evidence are available. Final combined suite passed98 tests with0 skips and1 intentional fixture warning; coordinator Standards and Spec reviews have no unresolved findings. The user delegated T03-T05 task acceptance to agent judgment; the final model-selection gate remains personal.
 
+## T04 implementation update, 9 October 2026
+
+The mart now uses first-delivered anchor predictors in seconds, an inclusive all-status 180-day target, explicit observation metadata, uncertain labels, and a shared pre-exclusion diagnostic relation. Raw money and configuration guards abort feature publication before invalid values replace the mart. Unknown aggregate constituents remain unknown; absent payment rows alone authorize item-spend recovery. AOV and obsolete day/missingness columns are removed. Power BI remains unchanged.
+
+Final combined validation passed 122 tests, zero skipped, with one intentional duplicate-archive warning in 539.05 seconds. Full-data dbt build completed 79 passes and two expected warnings, with no errors or skips. The warnings identify eight delivered orders missing customer-delivery timestamps and 289 eligible anchor payment/item discrepancies over 0.01. dbt docs generation passed. Independent Standards/Spec reviews are complete after export-preservation and documentation fixes.
+
+The implemented PostgreSQL census exactly matches the historical comparison: 93,358 anchor candidates, 93,171 eligible, 2,398 eligible positives including 373 early positives, 64,627 eligible negatives and 26,146 uncertain customers. Exclusions total 187: 23 missing-timestamp customers, one unrecoverable payment type and 163 negative carrier durations. Labels lost are one early positive, 18 negatives and 168 uncertain cases. Missing-carrier reason count 2 and missing-delivery reason count 8 overlap in one customer; exclusive patterns reconcile the union of 23 missing-timestamp customers.
+
+Lifecycle-only warnings reconcile to the historical union of 1,337 customers: 163 negative-carrier cases excluded and 1,174 others retained. The exported retained warning union is 1,454 because it also includes 289 payment/item discrepancies, with nine overlaps. This is a broader warning definition, not a census discrepancy. No zero-spend or zero-item-price warning occurred in the real data. Observation cutoff is 2018-10-17 17:30:18 and frozen date 2018-10-17.
+
+Durable evidence, source fingerprints, generated dbt docs, census JSON/Parquet and a portable PostgreSQL dump are under C:/Users/prince/.codex/visualizations/2026/10/09/01a11faf-27a8-7441-a7ba-1c98add13e78/pipeline-evidence/t04. Source CSVs were read only; the database was disposable. T05 remains the next implementation task; modeling and final personal selection remain deferred.
+
 ## Current implementation
 
 Present: PostgreSQL dbt project, nine staging models, `customer_features` mart, YAML and five singular SQL tests, upload/validation/connection scripts, initial uploader/connection tests, the verify-olist CLI harness, requirements, and a Power BI file. Dev already excludes incomplete first-delivered timestamps without duration imputation/flags, permits unknown payment type, and tests the missing-payment-row fallback.
