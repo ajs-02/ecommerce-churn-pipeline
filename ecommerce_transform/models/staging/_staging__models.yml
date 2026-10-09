@@ -1,175 +1,201 @@
 version: 2
-
 models:
-  - name: stg_customers
-    description: One row per order-customer record (customer_id is unique; customer_unique_id is the person).
-    columns:
-      - name: customer_id
-        description: Order-scoped customer key (primary key of the raw customers table).
-        tests:
-          - unique
-          - not_null
-      - name: customer_unique_id
-        description: Stable identifier for the actual person across orders.
-        tests:
-          - not_null
-      - name: customer_zip_code_prefix
-        description: Integer Brazilian CEP prefix from the Olist source (not a full postal code).
-      - name: customer_state
-        description: Two-letter Brazilian state code, uppercased.
-
-  - name: stg_orders
-    description: One row per order with typed lifecycle timestamps.
-    columns:
-      - name: order_id
-        description: Primary key.
-        tests:
-          - unique
-          - not_null
-      - name: customer_id
-        description: Foreign key to stg_customers.customer_id.
-        tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('stg_customers')
-                field: customer_id
-      - name: order_status
-        description: Order lifecycle status from the Olist source.
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values:
-                  - delivered
-                  - shipped
-                  - canceled
-                  - unavailable
-                  - invoiced
-                  - processing
-                  - created
-                  - approved
-      - name: order_purchase_ts
-        description: When the customer placed the order.
-      - name: order_approved_ts
-        description: When payment was approved (null if the order was never approved).
-      - name: order_delivered_carrier_ts
-        description: When the order was handed to the carrier (null if never shipped).
-      - name: order_delivered_customer_ts
-        description: When the order was delivered to the customer (null if not delivered).
-      - name: order_estimated_delivery_ts
-        description: Carrier's estimated delivery date promised at purchase.
-
-  - name: stg_order_items
-    description: One row per line item within an order.
+- name: stg_customers
+  description: One row per order-customer record (customer_id is unique; customer_unique_id is the person).
+  columns:
+  - name: customer_id
+    description: Order-scoped customer key (primary key of the raw customers table).
     tests:
-      - unique_combination_of_columns:
-          arguments:
-            combination_of_columns:
-              - order_id
-              - order_item_id
-    columns:
-      - name: order_id
-        description: Foreign key to stg_orders.order_id.
-        tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('stg_orders')
-                field: order_id
-      - name: order_item_id
-        description: Integer line-item sequence within the order (1-based).
-        tests:
-          - not_null
-      - name: product_id
-        description: Foreign key to stg_products.product_id.
-        tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('stg_products')
-                field: product_id
-      - name: item_price
-        description: Line-item merchandise price (excludes freight).
-        tests:
-          - not_null
-      - name: freight_value
-        description: Freight charged for this line item.
+    - unique
+    - not_null
+  - name: customer_unique_id
+    description: Stable identifier for the actual person across orders.
+    tests:
+    - not_null
+  - name: customer_zip_code_prefix
+    description: Integer Brazilian CEP prefix from the Olist source (not a full postal code).
+  - name: customer_state
+    description: Two-letter Brazilian state code, uppercased.
+  - name: customer_city
+    description: Source city for the order-scoped customer.
+- name: stg_orders
+  description: One row per order with typed lifecycle timestamps.
+  columns:
+  - name: order_id
+    description: Primary key.
+    tests:
+    - unique
+    - not_null
+  - name: customer_id
+    description: Foreign key to stg_customers.customer_id.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg_customers')
+          field: customer_id
+  - name: order_status
+    description: Order lifecycle status from the Olist source.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - delivered
+          - shipped
+          - canceled
+          - unavailable
+          - invoiced
+          - processing
+          - created
+          - approved
+  - name: order_purchase_ts
+    description: When the customer placed the order.
+    tests:
+    - not_null
+  - name: order_approved_ts
+    description: When payment was approved (null if the order was never approved).
+  - name: order_delivered_carrier_ts
+    description: When the order was handed to the carrier (null if never shipped).
+  - name: order_delivered_customer_ts
+    description: When the order was delivered to the customer (null if not delivered).
+  - name: order_estimated_delivery_ts
+    description: Carrier's estimated delivery date promised at purchase.
+- name: stg_order_items
+  description: One row per line item within an order.
+  tests:
+  - unique_combination_of_columns:
+      arguments:
+        combination_of_columns:
+        - order_id
+        - order_item_id
+  columns:
+  - name: order_id
+    description: Foreign key to stg_orders.order_id.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg_orders')
+          field: order_id
+  - name: order_item_id
+    description: Integer line-item sequence within the order (1-based).
+    tests:
+    - not_null
+  - name: product_id
+    description: Foreign key to stg_products.product_id.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg_products')
+          field: product_id
+  - name: item_price
+    description: Line-item merchandise price (excludes freight).
+  - name: freight_value
+    description: Freight charged for this line item.
+  - name: seller_id
+    description: Source seller identifier; optional unused seller staging remains outside required predictor
+      joins.
+  - name: shipping_limit_ts
+    description: Typed source shipment deadline.
+- name: stg_products
+  description: One row per product with an English category name when available.
+  columns:
+  - name: product_id
+    description: Primary key.
+    tests:
+    - unique
+    - not_null
+  - name: category_english
+    description: English category, falling back to Portuguese name or 'unknown'.
+    tests:
+    - not_null
+  - name: product_category_name
+    description: Optional source Portuguese category.
+  - name: product_weight_g
+    description: Source product weight in grams.
+  - name: product_length_cm
+    description: Source product length in centimetres.
+  - name: product_height_cm
+    description: Source product height in centimetres.
+  - name: product_width_cm
+    description: Source product width in centimetres.
+- name: stg_order_payments
+  description: One row per order after aggregating split payments.
+  columns:
+  - name: order_id
+    description: Primary key after aggregation (one payment summary per order).
+    tests:
+    - unique
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg_orders')
+          field: order_id
+  - name: total_payment_value
+    description: Sum of all payment rows, unknown when any constituent amount is null.
+  - name: favorite_payment_type
+    description: Type with largest summed value, ties alphabetically under C collation; unknown types
+      remain null.
+  - name: used_voucher
+    description: 'True if any payment row on the order has payment_type = voucher (split tenders still
+      count). Distinct from favorite_payment_type.
 
-  - name: stg_products
-    description: One row per product with an English category name when available.
-    columns:
-      - name: product_id
-        description: Primary key.
-        tests:
-          - unique
-          - not_null
-      - name: category_english
-        description: English category, falling back to Portuguese name or 'unknown'.
-        tests:
-          - not_null
+      '
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - true
+          - false
+          quote: false
+  - name: max_installments
+    description: Maximum recorded installment count.
+  - name: payment_row_count
+    description: Count of raw split-tender rows.
+- name: stg_order_reviews
+  description: 'One row per review_id. Grain stays at review, not order. Duplicate review_ids in the extract
+    (same review on multiple order_ids) are source errors; staging keeps the first occurrence (earliest
+    review_creation_ts, then order_id).
 
-  - name: stg_order_payments
-    description: One row per order after aggregating split payments.
-    columns:
-      - name: order_id
-        description: Primary key after aggregation (one payment summary per order).
-        tests:
-          - unique
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('stg_orders')
-                field: order_id
-      - name: total_payment_value
-        description: Sum of payment_value across all payment rows for the order.
-        tests:
-          - not_null
-      - name: favorite_payment_type
-        description: Payment type that contributed the largest share of the order value.
-      - name: used_voucher
-        description: >
-          True if any payment row on the order has payment_type = voucher
-          (split tenders still count). Distinct from favorite_payment_type.
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values:
-                  - true
-                  - false
+    '
+  columns:
+  - name: review_id
+    description: 'Primary key after deduplicating source errors that reused the same review_id on more
+      than one order_id.
 
-  - name: stg_order_reviews
-    description: >
-      One row per review_id. Grain stays at review, not order. Duplicate
-      review_ids in the extract (same review on multiple order_ids) are source
-      errors; staging keeps the first occurrence (earliest review_creation_ts,
-      then order_id).
-    columns:
-      - name: review_id
-        description: >
-          Primary key after deduplicating source errors that reused the same
-          review_id on more than one order_id.
-        tests:
-          - unique
-          - not_null
-      - name: order_id
-        description: Foreign key to stg_orders.order_id. An order may have more than one review.
-        tests:
-          - not_null
-          - relationships:
-              arguments:
-                to: ref('stg_orders')
-                field: order_id
-      - name: review_score
-        description: Integer star rating from the customer. Never null in the Olist extract.
-        tests:
-          - not_null
-      - name: review_comment_title
-        description: Optional short title the customer wrote with the review.
-      - name: review_comment_message
-        description: Optional free-text review body.
-      - name: review_creation_ts
-        description: When the review was created.
-      - name: review_answer_ts
-        description: When the review was answered or recorded by the marketplace.
+      '
+    tests:
+    - unique
+    - not_null
+  - name: order_id
+    description: Foreign key to stg_orders.order_id. An order may have more than one review.
+    tests:
+    - not_null
+    - relationships:
+        arguments:
+          to: ref('stg_orders')
+          field: order_id
+  - name: review_score
+    description: Integer star rating from the customer. Never null in the Olist extract.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          quote: false
+  - name: review_comment_title
+    description: Optional short title the customer wrote with the review.
+  - name: review_comment_message
+    description: Optional free-text review body.
+  - name: review_creation_ts
+    description: When the review was created.
+  - name: review_answer_ts
+    description: When the review was answered or recorded by the marketplace.
