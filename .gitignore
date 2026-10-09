@@ -58,7 +58,10 @@ data/*
 
 # IDE & editors
 .vscode/
-.cursor/
+.cursor/*
+!.cursor/rules/
+.cursor/rules/*
+!.cursor/rules/project.mdc
 .idea/
 *.swp
 *.swo
@@ -71,6 +74,7 @@ desktop.ini
 
 # Docs
 docs/*
+!docs/project_spec.md
 
 # Logs
 *.log

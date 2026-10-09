@@ -1,0 +1,33 @@
+---
+description: Project boundaries and agent instructions for the Olist repeat-buyer propensity pipeline
+alwaysApply: true
+---
+
+# Olist Repeat Buyer Propensity Pipeline
+
+## What this project is
+Predict repeat purchase probability from Kaggle Olist so marketing can target one-time buyers likely to buy again. Spec: `docs/project_spec.md`.
+
+## Architecture (do not bypass)
+Download CSVs into `data/` → local Pandas/PyArrow and/or Postgres → dbt in `ecommerce_transform/` (typed staging → `customer_features`) → `scripts/train_model.py` upserts scores to Postgres → Power BI. Cloud training: `.github/workflows/train_model.yml` against Heroku via GitHub Secrets.
+
+## Boundaries
+- Spec is source of truth. Repeat buyer = `total_orders` > 1 (~3% positive). Do not use `total_orders` as a predictor. Do not use Accuracy as the primary metric (use PR-AUC, F1, confusion matrix). Do not change the target without asking.
+- **Feature window:** Predictors on `customer_features` come from the **first delivered order** only. `total_orders` remains the lifetime delivered count and is **label-only**.
+- **Recency:** `days_since_last_purchase` is days since that first purchase vs a frozen as-of date (dbt `var('as_of_date')` or `max(order_purchase_ts)::date`). Do not use `current_date` or last-order recency.
+- **Do not reconstruct the label:** Do not feed `total_orders` or both `total_spent` and `average_order_value` into the model. Do not compute spend, payment type, voucher, items, freight, reviews, or durations from later orders.
+- **Imputation lives in the mart:** mean + `*_missing` for the three durations; 0 + missing flag for `after_estimated_delivery`. Do not leave those as nulls for Python to fill.
+- **Missing payments:** If the first delivered order has no payment rows, `total_spent` / `average_order_value` come from `sum(item_price + freight_value)` on that order, not 0. Leave `favorite_payment_type` null; do not invent a type and do not test `not_null` on it.
+- **Out of the mart:** no English category, no product photo counts, no second warehouse, no target change without asking.
+- `docs/ref/` is read-only. Reuse its dbt staging/test *patterns* (typed columns, payment grain, YAML tests, singular warn tests). Do not copy DuckDB, Streamlit, Docker, or KPI star-schema marts.
+- Dual mode: local CSV/Postgres for development; Heroku Postgres for dashboard and CI. Do not add a second warehouse (DuckDB) unless asked.
+- Secrets stay in `.env` locally and GitHub Secrets in CI. Never print them. `.env.example` is the only committed template.
+- Grain of `customer_features`: one row per `customer_unique_id`. Payments staging is one row per `order_id`. Reviews staging is one row per `review_id`; duplicate `review_id`s in the extract are source errors — keep the first occurrence (`review_creation_ts`, then `order_id`).
+- Prefer extending existing models/scripts over a parallel pipeline.
+- **Docs stay in lockstep:** When changing `customer_features` definitions, update `docs/project_spec.md` and this rule file in the same change so they do not contradict the SQL. “Fill spec gaps only when missing” applies to **new artifacts** (scripts, workflow, tests), not to revising feature definitions.
+
+## When implementing
+- Fill spec gaps only when the artifact is missing (new scripts, workflow, tests). Revising mart grain, feature window, or required column definitions requires updating the spec and this file in the same change.
+- All Pandas I/O uses the PyArrow engine (`engine="pyarrow"` and/or `dtype_backend="pyarrow"`).
+- dbt: descriptions, unique/not_null/accepted_values, relationship tests, plus ported singular tests. Postgres SQL only.
+- `train_model.py` must train XGBoost with SMOTE (train set only) and `scale_pos_weight`, then INSERT/UPDATE repeat-purchase predictions in Postgres (upsert on `customer_unique_id`) for Power BI.

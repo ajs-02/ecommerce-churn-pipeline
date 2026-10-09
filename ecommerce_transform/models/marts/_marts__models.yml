@@ -52,9 +52,11 @@ models:
         tests:
           - not_null
       - name: favorite_payment_type
-        description: Staged favorite payment type on the first delivered order.
-        tests:
-          - not_null
+        description: >
+          Staged favorite payment type on the first delivered order. Stays null
+          when that order has no payment rows (one known Olist gap). Do not
+          invent a type and do not test not_null.
+
       - name: item_count
         description: Line-item count on the first delivered order (no products join).
         tests:
