@@ -62,6 +62,11 @@ data/*
 !.cursor/rules/
 .cursor/rules/*
 !.cursor/rules/project.mdc
+!.cursor/skills/
+!.cursor/skills/**
+
+# Verification transcripts stay on disk after cleanup; they are not source.
+artifacts/verify-olist/
 .idea/
 *.swp
 *.swo
