@@ -2,11 +2,11 @@
 
 Explore first-delivered-order features associated with another order of any status within 180 days. Compare classifiers using recall, F2 and MCC as priorities, report the standard metrics, and let the project owner personally choose a candidate before final test evaluation.
 
-The agreed design is in [the specification](docs/project_spec.md). [Implementation gaps](docs/implementation_gap.md), [the task plan](docs/implementation_plan.md), and [test acceptance cases](docs/test_acceptance_matrix.md) distinguish what exists from what remains to build. The design was confirmed on 8 October 2026; pipeline implementation has not yet been updated to match it.
+The agreed design is in [the specification](docs/project_spec.md). [Implementation gaps](docs/implementation_gap.md), [the task plan](docs/implementation_plan.md), and [test acceptance cases](docs/test_acceptance_matrix.md) distinguish what exists from what remains to build. The design was confirmed on 8 October 2026, and pipeline implementation is in progress.
 
 ## Current status
 
-The repository contains PostgreSQL/dbt staging and a customer feature mart, upload/validation/connection scripts, initial uploader/connection tests, a CLI verification harness, and an existing Power BI report. Current dev already excludes incomplete anchor timestamps, avoids duration imputation, and applies the missing-payment-row spend fallback. The downloader, profiling/EDA, experiment code, comprehensive acceptance tests, human selection gate and prediction-history writeback remain planned. SQL still uses day units and does not implement the new target.
+The repository contains PostgreSQL/dbt staging and a customer feature mart, upload/validation/connection scripts, reproducible Olist acquisition and manifest validation, a CLI verification harness, and an existing Power BI report. Current dev already excludes incomplete anchor timestamps, avoids duration imputation, and applies the missing-payment-row spend fallback. Profiling/EDA, experiment code, human selection gate and prediction-history writeback remain planned. SQL still uses day units and does not implement the new target.
 
 ## Agreed experiment
 
@@ -28,11 +28,14 @@ Both local and Heroku execution use PostgreSQL. CSVs are acquisition inputs; dbt
 
 1. Create a virtual environment and install `requirements.txt`.
 2. Copy `.env.example` to `.env` and configure the chosen PostgreSQL target.
-3. Place the nine Olist CSVs in `data/`.
-4. Existing commands are `python scripts/upload_data.py`, `python scripts/validate_upload.py`, and `python scripts/test_connection.py`.
-5. From `ecommerce_transform/`, run `dbt run`, `dbt test`, and `dbt docs generate`, using the configured profile/environment.
+3. To validate nine existing Olist CSVs and write `data/dataset_manifest.json`, run `python scripts/download_data.py --mode existing --data-dir data`. The manifest records source mode, file sizes, row counts, columns, SHA-256 hashes, and a dataset fingerprint.
+4. To acquire the Olist archive from Kaggle, configure Kaggle CLI credentials, then run `python scripts/download_data.py --mode download --data-dir data`. The command validates the staged archive before publishing it and preserves the current dataset when download or validation fails. Tests mock the external Kaggle command and do not need credentials or network access.
+5. Existing database commands are `python scripts/upload_data.py`, `python scripts/validate_upload.py`, and `python scripts/test_connection.py`.
+6. From `ecommerce_transform/`, run `dbt run`, `dbt test`, and `dbt docs generate`, using the configured profile/environment.
 
-Dev has transactional uploads and failing exit codes, but uploads still drop tables with CASCADE and do not validate the complete dataset manifest. Do not treat these commands as proof of the planned dependency-preserving refresh or new feature contract. Each task will update this runbook to the commands actually verified during implementation.
+Dev has transactional uploads and failing exit codes, but uploads still drop tables with CASCADE and do not consume or validate the dataset manifest. Do not treat these commands as proof of the planned dependency-preserving refresh or new feature contract. Each task will update this runbook to the commands actually verified during implementation.
+
+Download publication stages and validates the complete candidate before swapping the data directory. A failed rename restores the prior directory; if the operating system also prevents restoration, the error reports the retained `.olist-previous-*` backup. Concurrent readers can briefly find the destination missing during a directory rename. The manifest fingerprints archive bytes when downloaded, but it cannot detect upstream changes that remove complete CSV records unless the upstream source publishes a trusted expected size or checksum.
 
 ## Existing dashboard and deferred work
 
