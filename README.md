@@ -6,9 +6,9 @@ The agreed design is in [the specification](docs/project_spec.md). [Implementati
 
 ## Current status
 
-The repository contains PostgreSQL/dbt staging and a customer feature mart, upload/validation/connection scripts, reproducible Olist acquisition and manifest validation, a CLI verification harness, and an existing Power BI report. Current dev already excludes incomplete anchor timestamps, avoids duration imputation, and applies the missing-payment-row spend fallback. Profiling/EDA, experiment code, human selection gate and prediction-history writeback remain planned. SQL still uses day units and does not implement the new target.
+The repository contains PostgreSQL/dbt staging and a customer feature mart, upload/validation/connection scripts, reproducible Olist acquisition and manifest validation, a CLI verification harness, and an existing Power BI report. Current dev already excludes incomplete anchor timestamps, avoids duration imputation, and applies the missing-payment-row spend fallback. Profiling/EDA, experiment code, human selection gate and prediction-history writeback remain planned. T04 implements seconds-based anchor predictors, inclusive all-status 180-day targets and a shared eligibility diagnostic census.
 
-T03 completes required typed staging, summed payment-type shares with alphabetical ties, null-propagating totals, raw negative/non-finite monetary checks, and executable staging integrity checks. See [staging keys and cardinalities](docs/erd.md) and [execution decisions](docs/execution_log.md). T03 validation passed98 tests with0 skips and1 intentional fixture warning; staging dbt run/test/docs are verified on disposable PostgreSQL; the feature mart still awaits T04.
+T03 completes required typed staging, summed payment-type shares with alphabetical ties, null-propagating totals, raw negative/non-finite monetary checks, and executable staging integrity checks. See [staging keys and cardinalities](docs/erd.md) and [execution decisions](docs/execution_log.md). T03 validation passed98 tests with0 skips and1 intentional fixture warning; staging dbt run/test/docs are verified on disposable PostgreSQL; T04 feature/target verification is in progress.
 
 ## Agreed experiment
 
@@ -50,3 +50,5 @@ Power BI remains unedited. AOV removal and feature renaming may break its refres
 ![Existing Olist dashboard recording](Power%20BI/Dashboard%20Recording.gif)
 
 Automated cloud training, push/weekly jobs, deployment, synthetic future-customer data, information-arrival audit, fitted calibration and additional classifiers are deferred. Every coding task requires review of its outputs, test cases and outcomes before acceptance.
+
+T04 diagnostics use `python scripts/export_feature_diagnostics.py --output-dir reports/feature_diagnostics` after `dbt build`. The JSON census separates all, eligible and excluded positive/negative/uncertain customers and early positives. Reason counts overlap; exclusive pattern counts and population totals count each customer once. Bounded Parquet parts preserve original timestamps and source evidence. The mart excludes unrecoverable predictors and negative purchase-relative elapsed times, while other chronology errors and monetary discrepancies over0.01 remain warnings. Frozen configuration uses `dbt ... --vars '{as_of_date: "2018-10-17", observation_end_ts: "2018-10-17 17:30:18"}'`; defaults derive from all recorded purchases. Neither default proves observation coverage. `T03_POSTGRES_PORT` and `T04_POSTGRES_PORT` alongside `T02_POSTGRES_PORT` enable isolated integration checks.

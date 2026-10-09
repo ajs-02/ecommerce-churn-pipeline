@@ -1,117 +1,151 @@
 version: 2
-
 models:
-  - name: customer_features
-    description: >
-      One row per customer_unique_id whose first delivered order has non-null
-      approval, carrier, customer-delivery, and estimated-delivery timestamps.
-      Customers missing any of those timestamps on that first order are absent.
-      Predictors come from that order only. total_orders is the lifetime delivered
-      count and is label-only. Do not use it as a predictor. average_order_value
-      equals total_spent under the first-order definition. Do not pass both into
-      XGBoost. Do not impute durations and do not emit *_missing columns. The
-      review-score average is avg(review_score) over all of stg_order_reviews.
-      Do not emit category_english or product_photos_qty.
-    columns:
-      - name: customer_unique_id
-        description: Grain of the table. One person, possibly many order-scoped customer_ids.
-        tests:
-          - unique
-          - not_null
-      - name: customer_state
-        description: >
-          Two-letter Brazilian state on the first delivered order's customer_id
-          (not the mode across lifetime orders).
-        tests:
-          - not_null
-      - name: total_orders
-        description: >
-          Lifetime count of distinct delivered orders. Source of the repeat-buyer
-          label (repeat = total_orders > 1). Label-only — must not be a predictor.
-        tests:
-          - not_null
-      - name: total_spent
-        description: >
-          Payment total on the first delivered order (left-joined). If that
-          order has no payment rows, use sum(item_price + freight_value)
-          instead of 0 (one known Olist gap). A warn-level singular test
-          compares this to the item total (tolerance 0.01).
-        tests:
-          - not_null
-      - name: average_order_value
-        description: >
-          Equals total_spent under the first-order definition (kept for the
-          dashboard). Do not pass both this column and total_spent into XGBoost.
-        tests:
-          - not_null
-      - name: days_since_last_purchase
-        description: >
-          Days between the first delivered purchase date and a frozen as_of_date
-          (dbt var as_of_date, else max order_purchase_ts::date). Name kept;
-          meaning is first/only purchase, not last-order recency vs current_date.
-        tests:
-          - not_null
-      - name: favorite_payment_type
-        description: >
-          Staged favorite payment type on the first delivered order. Stays null
-          when that order has no payment rows (one known Olist gap). Do not
-          invent a type and do not test not_null.
-
-      - name: item_count
-        description: Line-item count on the first delivered order (no products join).
-        tests:
-          - not_null
-      - name: freight_value
-        description: Sum of item freight on the first delivered order.
-        tests:
-          - not_null
-      - name: used_voucher
-        description: >
-          True if any payment row on the first delivered order has
-          payment_type = voucher (split tenders still count).
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values:
-                  - true
-                  - false
-      - name: delivery_days
-        description: >
-          Days from purchase to customer delivery on the first delivered order
-          (extract(epoch from (end_ts - purchase_ts)) / 86400.0). Observed only.
-          A null delivery timestamp excludes the customer.
-        tests:
-          - not_null
-      - name: approval_days
-        description: >
-          Days from purchase to approval on the first delivered order. Observed
-          only. A null approval timestamp excludes the customer.
-        tests:
-          - not_null
-      - name: carrier_days
-        description: >
-          Days from purchase to carrier handoff on the first delivered order.
-          Observed only. A null carrier timestamp excludes the customer.
-        tests:
-          - not_null
-      - name: after_estimated_delivery
-        description: >
-          Calendar days late versus the first delivered order's estimate (0 if
-          delivered on or before the estimate). A null delivery or estimate
-          timestamp excludes the customer. Do not store 0 for a missing timestamp.
-        tests:
-          - not_null
-      - name: review_below_average
-        description: >
-          True if any review on the first delivered order has review_score
-          strictly below the extract-wide avg(review_score). False if the
-          customer left no review or every score is at or above the average.
-          Never null.
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values:
-                  - true
-                  - false
+- name: customer_features
+  description: One eligible anchor customer row; uncertainlabels retained. Predictors
+    use anchor only. Metadata and lifetimecounts are not predictors. No imputation
+    or later substitution.
+  columns:
+  - name: customer_unique_id
+    description: Stable person key, exactly one eligible row.
+    tests:
+    - not_null
+    - unique
+  - name: customer_state
+    description: State on anchor customer record.
+    tests:
+    - not_null
+  - name: first_delivered_order_id
+    description: Earliest delivered purchase, ties by order ID before eligibility.
+    tests:
+    - not_null
+  - name: first_delivered_purchase_ts
+    description: Timezone-naive source anchor purchase timestamp.
+    tests:
+    - not_null
+  - name: target_window_end_ts
+    description: Anchor purchase plus180days, inclusive repeat boundary.
+    tests:
+    - not_null
+  - name: observation_end_ts
+    description: All-status max recorded purchase or valid explicit override; coverage
+      assumption.
+    tests:
+    - not_null
+  - name: observation_end_provenance
+    description: maximum_recorded_purchase or explicit_override.
+    tests:
+    - not_null
+  - name: as_of_date
+    description: Frozen calendar date from all-status max purchase or valid override.
+    tests:
+    - not_null
+  - name: has_complete_followup
+    description: Target window end is no later than observation end.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - true
+          - false
+          quote: false
+  - name: repeat_within_180_days
+    description: 1 observed repeat,0 completefollowup withnone,NULL unfinished withnone.
+    tests:
+    - accepted_values:
+        arguments:
+          values:
+          - 0
+          - 1
+          quote: false
+  - name: total_orders
+    description: Lifetime distinct delivered order count, descriptive only.
+    tests:
+    - not_null
+  - name: total_spent
+    description: Anchor sum of all payments; only absent payment rows recover known
+      itemprice+freight sum.
+    tests:
+    - not_null
+  - name: seconds_since_first_purchase
+    description: Frozen calendar date minus anchor date multiplied86400.
+    tests:
+    - not_null
+  - name: favorite_payment_type
+    description: Largest summed payment-type share, deterministic alphabetical tie;
+      unrecoverable null excluded.
+    tests:
+    - not_null
+  - name: item_count
+    description: Positive integer anchor item-line count without fan-out.
+    tests:
+    - not_null
+  - name: freight_value
+    description: Anchor item freight sum; any null constituent remains unknown.
+    tests:
+    - not_null
+  - name: used_voucher
+    description: Any anchor payment type voucher.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - true
+          - false
+          quote: false
+  - name: delivery_seconds
+    description: Elapsed purchase to customer-delivery epochseconds, fractions preserved.
+    tests:
+    - not_null
+  - name: approval_seconds
+    description: Elapsed purchase to approval epochseconds, fractions preserved.
+    tests:
+    - not_null
+  - name: carrier_seconds
+    description: Elapsed purchase to carrier epochseconds, fractions preserved.
+    tests:
+    - not_null
+  - name: after_estimated_delivery_seconds
+    description: Nonnegative calendar-date lateness multiplied86400; same-date zero.
+    tests:
+    - not_null
+  - name: review_below_average
+    description: Any staged anchor review strictly below extract-wide staged average;
+      absencefalse.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - true
+          - false
+          quote: false
+  - name: has_first_order_review
+    description: At least one staged anchor review, independent of laterorders.
+    tests:
+    - not_null
+    - accepted_values:
+        arguments:
+          values:
+          - true
+          - false
+          quote: false
+- name: customer_feature_diagnostics
+  description: All firstdelivered candidates before exclusions. Single source for
+    mart eligibility and reconciling census; originaltimestamps and reasonarrays preserved.
+  columns:
+  - name: customer_unique_id
+    tests:
+    - not_null
+    - unique
+  - name: first_delivered_order_id
+    tests:
+    - not_null
+  - name: is_eligible
+    tests:
+    - not_null
+  - name: exclusion_reasons
+    description: Overlapping reasons; cardinality0 selects eligible.
+  - name: warning_reasons
+    description: Overlapping retained lifecycle and monetarywarnings.
