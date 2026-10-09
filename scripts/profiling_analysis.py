@@ -215,6 +215,7 @@ def write_eda_plots(frame, eda, output):
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib.ticker import PercentFormatter
     import numpy as np
 
     output = Path(output)
@@ -263,7 +264,18 @@ def write_eda_plots(frame, eda, output):
         [f"{row['state']}\nn={row['labeled']:,}" for row in states],
         [row["repeat_rate"] for row in states],
     )
-    plt.ylim(0, 1)
+    maximum_rate = max((row["repeat_rate"] for row in states), default=0)
+    plt.ylim(0, min(1, max(0.01, maximum_rate * 1.3)))
+    plt.gca().yaxis.set_major_formatter(PercentFormatter(1, decimals=1))
+    for index, row in enumerate(states):
+        plt.annotate(
+            f"{row['repeat_rate']:.2%}",
+            (index, row["repeat_rate"]),
+            xytext=(0, 4),
+            textcoords="offset points",
+            ha="center",
+            clip_on=False,
+        )
     plt.ylabel("Observed repeats / labeled customers")
     plt.title("Top five states by known-label denominator")
     save("state_repeat_rates")
