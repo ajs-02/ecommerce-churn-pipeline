@@ -2,6 +2,10 @@
 
 Updated 8 October 2026 after the design interview and reconciled with dev at `6cb8a7c` before publication. The initial worktree review used `65b31e9`; dev contained additional fixes. The agreed contract is [project_spec.md](project_spec.md); this inventory is evidence and status, not a competing contract. The original supplied gap document contained an older warehouse census and contradictory historical imputation discussion. Neither its canvas instruction nor its implementation commands were executed.
 
+## T02 implementation update, 9 October 2026
+
+T01 acquisition/manifest is present. T02 adds required-file/schema/manifest checks, temporary staging, atomic dependency-preserving publication, bounded Arrow CSV/SQL loaders and shared truthful connection/validation scripts. Real disposable PostgreSQL tests cover existing views, table identities, reruns, later-batch and publication failures, nullable numeric fields and current SUM/AVG compatibility. Evidence remains subject to the owner's review; T02 is not yet accepted. Profiling, modeling, typed staging completion and later tasks remain unchanged. The inventory below is the historical pre-implementation snapshot.
+
 ## Current implementation
 
 Present: PostgreSQL dbt project, nine staging models, `customer_features` mart, YAML and five singular SQL tests, upload/validation/connection scripts, initial uploader/connection tests, the verify-olist CLI harness, requirements, and a Power BI file. Dev already excludes incomplete first-delivered timestamps without duration imputation/flags, permits unknown payment type, and tests the missing-payment-row fallback.

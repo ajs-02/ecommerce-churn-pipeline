@@ -355,3 +355,136 @@ def test_validation_refuses_stale_manifest(database, tmp_path):
     path = data / "olist_customers_dataset.csv"
     path.write_text(path.read_text().replace("sao paulo", "campinas"))
     assert validate_upload.validate_row_counts(data) is False
+
+
+def test_new_raw_payment_table_supports_existing_numeric_aggregation(database):
+    assert upload_data.upload_csvs_to_postgres(ROOT / "tests/fixtures/olist_valid") == 0
+    with database.connect() as conn:
+        assert (
+            conn.execute(text("SELECT sum(payment_value) FROM order_payments")).scalar()
+            == 12
+        )
+
+
+def test_nullable_all_null_money_columns_remain_numeric_across_refresh(
+    database, tmp_path
+):
+    import shutil, csv
+
+    data = tmp_path / "data"
+    shutil.copytree(ROOT / "tests/fixtures/olist_valid", data)
+    for filename, fields in [
+        ("olist_order_items_dataset.csv", ["price", "freight_value"]),
+        ("olist_order_payments_dataset.csv", ["payment_value"]),
+    ]:
+        path = data / filename
+        rows = list(csv.reader(path.read_text().splitlines()))
+        for field in fields:
+            rows[1][rows[0].index(field)] = ""
+        with path.open("w", newline="") as stream:
+            csv.writer(stream).writerows(rows)
+    assert upload_data.upload_csvs_to_postgres(data) == 0
+    with database.connect() as conn:
+        assert (
+            conn.execute(text("SELECT sum(payment_value) FROM order_payments")).scalar()
+            is None
+        )
+        assert conn.execute(
+            text("SELECT price,freight_value FROM order_items")
+        ).one() == (None, None)
+        assert (
+            conn.execute(text("SELECT avg(review_score) FROM order_reviews")).scalar()
+            == 5
+        )
+    assert upload_data.upload_csvs_to_postgres(ROOT / "tests/fixtures/olist_valid") == 0
+    with database.connect() as conn:
+        assert (
+            conn.execute(text("SELECT sum(payment_value) FROM order_payments")).scalar()
+            == 12
+        )
+        assert (
+            conn.execute(
+                text("SELECT sum(price + freight_value) FROM order_items")
+            ).scalar()
+            == 12
+        )
+
+
+def test_current_dbt_payment_view_survives_success_rerun_and_rollback(
+    database, tmp_path
+):
+    import shutil
+
+    fixture = ROOT / "tests/fixtures/olist_valid"
+    assert upload_data.upload_csvs_to_postgres(fixture) == 0
+    model = (
+        ROOT / "ecommerce_transform/models/staging/stg_order_payments.sql"
+    ).read_text()
+    model = model.replace("{{ source('olist', 'order_payments') }}", "order_payments")
+    with database.begin() as conn:
+        conn.execute(text("CREATE VIEW payment_stage AS " + model))
+        oid = conn.execute(text("SELECT 'payment_stage'::regclass::oid")).scalar()
+        assert (
+            conn.execute(text("SELECT total_payment_value FROM payment_stage")).scalar()
+            == 12
+        )
+    data = tmp_path / "data"
+    shutil.copytree(fixture, data)
+    path = data / "olist_order_payments_dataset.csv"
+    path.write_text(path.read_text().replace("12.00", "17.00"))
+    for _ in range(2):
+        assert upload_data.upload_csvs_to_postgres(data) == 0
+        with database.connect() as conn:
+            assert (
+                conn.execute(
+                    text("SELECT total_payment_value FROM payment_stage")
+                ).scalar()
+                == 17
+            )
+            assert (
+                conn.execute(text("SELECT 'payment_stage'::regclass::oid")).scalar()
+                == oid
+            )
+    with database.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE FUNCTION reject_publication() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected publication failure'; END $$"
+            )
+        )
+        conn.execute(
+            text(
+                "CREATE TRIGGER reject_publication BEFORE INSERT ON sellers FOR EACH ROW EXECUTE FUNCTION reject_publication()"
+            )
+        )
+    assert upload_data.upload_csvs_to_postgres(fixture) == 1
+    with database.connect() as conn:
+        assert (
+            conn.execute(text("SELECT total_payment_value FROM payment_stage")).scalar()
+            == 17
+        )
+        assert (
+            conn.execute(text("SELECT 'payment_stage'::regclass::oid")).scalar() == oid
+        )
+
+    if os.getenv("T02_EVIDENCE_DIR"):
+        import json
+
+        with database.connect() as conn:
+            record = {
+                "model_path": "ecommerce_transform/models/staging/stg_order_payments.sql",
+                "substitution": "source('olist', 'order_payments') -> order_payments",
+                "original_view_oid": oid,
+                "final_view_oid": conn.execute(
+                    text("SELECT 'payment_stage'::regclass::oid")
+                ).scalar(),
+                "final_preserved_total": str(
+                    conn.execute(
+                        text("SELECT total_payment_value FROM payment_stage")
+                    ).scalar()
+                ),
+                "expected_initial_changed_rerun_rollback_totals": [12, 17, 17, 17],
+                "executed_sql": model,
+            }
+        (Path(os.environ["T02_EVIDENCE_DIR"]) / "dbt_payment_view.json").write_text(
+            json.dumps(record, indent=2)
+        )

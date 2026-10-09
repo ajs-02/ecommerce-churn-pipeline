@@ -103,7 +103,7 @@ def validate_dataset(data_dir: Path | str, *, source: dict[str, str]) -> dict:
                     count += 1
                 if count == 0:
                     raise DatasetValidationError(f"{name}: empty dataset")
-            frame = pd.read_csv(
+            frames = pd.read_csv(
                 path,
                 engine="c",
                 dtype_backend="pyarrow",
@@ -118,7 +118,7 @@ def validate_dataset(data_dir: Path | str, *, source: dict[str, str]) -> dict:
                 f"{name}: unreadable or malformed CSV"
             ) from None
         seen_keys = set()
-        for frame in frame:
+        for frame in frames:
             for field in schema.split():
                 if field not in frame.columns:
                     raise DatasetValidationError(

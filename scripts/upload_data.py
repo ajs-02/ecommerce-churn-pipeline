@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 from dataset_manifest import (
     SCHEMAS,
+    NUMBERS,
     validate_dataset,
     DatasetValidationError,
     validate_saved_manifest,
@@ -155,8 +156,20 @@ def upload_csvs_to_postgres(data_dir: Path | str | None = None) -> int:
                         for column in manifest["files"][file]["columns"]
                     )
                     cursor.execute(
-                        psql.SQL("CREATE TABLE IF NOT EXISTS {} (LIKE {})").format(
-                            target, stage
+                        psql.SQL("CREATE TABLE IF NOT EXISTS {} ({})").format(
+                            target,
+                            psql.SQL(", ").join(
+                                psql.SQL("{} {}").format(
+                                    psql.Identifier(column),
+                                    psql.SQL(
+                                        "NUMERIC"
+                                        if column in NUMBERS
+                                        and not column.endswith("zip_code_prefix")
+                                        else "TEXT"
+                                    ),
+                                )
+                                for column in manifest["files"][file]["columns"]
+                            ),
                         )
                     )
                     cursor.execute(psql.SQL("DELETE FROM {}").format(target))
