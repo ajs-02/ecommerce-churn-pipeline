@@ -24,7 +24,7 @@ Durable evidence, source fingerprints, generated dbt docs, census JSON/Parquet a
 
 ## T05 implementation update, 9 October 2026
 
-T05 adds ten real PostgreSQL/ydata reports and an HTML index, shared cohort/state/numeric EDA and an executable output-cleared notebook. Fixture checks cover missing-mart failures, exact summaries, known-label state denominators, separate uncertain analysis, visible charts and preservation of previous report snapshots. Final full-data evidence and combined review are pending; the historical inventory below remains a pre-implementation snapshot.
+T05 adds ten real PostgreSQL/ydata reports and an HTML index, shared cohort/state/numeric EDA and an executable output-cleared notebook. Fixture checks cover missing-mart failures, exact summaries, known-label state denominators, separate uncertain analysis, visible charts and preservation of previous report snapshots. The full combined suite passed 129 checks, the corrected affected suite passed eight checks, and final full-data profiles/notebook passed with native statistic reconciliation; the historical inventory below remains a pre-implementation snapshot.
 
 ## Current implementation
 
